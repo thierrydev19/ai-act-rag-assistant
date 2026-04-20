@@ -7,4 +7,5 @@ venv/
 .idea/
 .vscode/
 .streamlit/secrets.toml
-data/
+data/backup_*.patch
+docs/ToC-AI-Act-French.pdf
