@@ -87,6 +87,51 @@ class VectorStore:
         embedding = result["embeddings"][0]
         return [float(v) for v in embedding]
 
+    def search(
+        self,
+        *,
+        query_embedding: list[float],
+        top_k: int = 5,
+    ) -> list[dict[str, Any]]:
+        """Recherche les chunks les plus proches pour un embedding donné."""
+        if top_k <= 0:
+            raise ValueError("top_k doit etre strictement positif.")
+        if not query_embedding:
+            raise ValueError("query_embedding vide.")
+
+        try:
+            result = self._collection.query(
+                query_embeddings=[query_embedding],
+                n_results=top_k,
+                include=["documents", "metadatas", "distances"],
+            )
+        except Exception as exc:
+            msg = f"Echec recherche Chroma: {exc}"
+            logger.error(msg)
+            raise RuntimeError(msg) from exc
+
+        ids = result.get("ids", [[]])[0]
+        docs = result.get("documents", [[]])[0]
+        metas = result.get("metadatas", [[]])[0]
+        distances = result.get("distances", [[]])[0]
+        hits: list[dict[str, Any]] = []
+        for chunk_id, doc, metadata_payload, distance in zip(
+            ids, docs, metas, distances, strict=False
+        ):
+            if metadata_payload is None or doc is None:
+                continue
+            hits.append(
+                {
+                    "chunk_id": chunk_id,
+                    "distance": float(distance),
+                    "chunk": DocumentChunk(
+                        metadata=self._deserialize_metadata(metadata_payload),
+                        chunk_text=doc,
+                    ),
+                }
+            )
+        return hits
+
     def _chunk_id(self, chunk: DocumentChunk) -> str:
         meta = chunk.metadata
         return f"{meta.document_id}:{meta.chunk_index}"
