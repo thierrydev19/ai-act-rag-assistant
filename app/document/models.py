@@ -14,8 +14,8 @@ class DocumentMetadata:
 
     document_id: str
     document_title: str
-    page_number: int
-    article_ref: str
+    page_number: int | tuple[int, int]
+    article_ref: Optional[str]
     section_ref: Optional[str]
     language: str
     version_date: str
