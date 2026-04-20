@@ -59,6 +59,9 @@ class TestRetrievalService(unittest.TestCase):
             vector_store=store,
             top_k=2,
             max_acceptable_distance=1.35,
+            relaxed_max_distance=1.6,
+            min_lexical_overlap=0.05,
+            min_combined_score=0.05,
         )
 
         result = svc.retrieve(UserQuestion(text="Quelles obligations de transparence sont prevues ?"))
@@ -109,6 +112,9 @@ class TestRetrievalService(unittest.TestCase):
             vector_store=store,
             top_k=2,
             max_acceptable_distance=1.35,
+            relaxed_max_distance=1.6,
+            min_lexical_overlap=0.05,
+            min_combined_score=0.05,
         )
         questions = [
             "Quelles sont les obligations de transparence ?",
@@ -124,6 +130,37 @@ class TestRetrievalService(unittest.TestCase):
                 self.assertIsNotNone(first.metadata.chunk_index)
                 self.assertIsNotNone(first.metadata.page_number)
                 self.assertTrue(first.chunk_text.strip())
+
+    def test_hybrid_ranking_prioritizes_lexically_related_chunk(self) -> None:
+        tmp = tempfile.mkdtemp(prefix="retrieval_hybrid_")
+        store = VectorStore(persist_directory=tmp, collection_name="retrieval_hybrid")
+        store.index(
+            [
+                _mk_chunk(
+                    chunk_index=30,
+                    text="Regles generales sans mention de transparence explicite.",
+                    article_ref="Article 1",
+                    page_number=10,
+                ),
+                _mk_chunk(
+                    chunk_index=31,
+                    text="Les obligations de transparence imposent des informations claires aux utilisateurs.",
+                    article_ref="Article 13",
+                    page_number=52,
+                ),
+            ]
+        )
+        svc = RetrievalService(
+            vector_store=store,
+            top_k=1,
+            max_acceptable_distance=1.35,
+            relaxed_max_distance=1.6,
+            min_lexical_overlap=0.05,
+            min_combined_score=0.05,
+        )
+        result = svc.retrieve(UserQuestion(text="Obligations de transparence pour utilisateurs"))
+        self.assertTrue(result.chunks)
+        self.assertEqual(result.chunks[0].metadata.article_ref, "Article 13")
 
     def test_no_generation_or_ui_or_auth_imports(self) -> None:
         src = Path(__file__).resolve().parents[2] / "app" / "retrieval" / "service.py"
