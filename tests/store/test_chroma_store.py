@@ -91,6 +91,39 @@ class TestChromaVectorStore(unittest.TestCase):
         self.assertGreater(len(emb), 0)
         self.assertTrue(any(abs(x) > 0 for x in emb))
 
+    def test_reindex_replaces_previous_collection_content(self) -> None:
+        tmp = tempfile.mkdtemp(prefix="chroma_test_reindex_")
+        store = VectorStore(persist_directory=tmp, collection_name="test_reindex")
+        store.index(
+            [
+                _chunk(
+                    chunk_index=1,
+                    page_number=10,
+                    article_ref="Article 3",
+                    section_ref=None,
+                    text="Ancien contenu indexe.",
+                )
+            ]
+        )
+        loaded_before = store.get_by_chunk_id("doc-ai-act:1")
+        self.assertIn("Ancien contenu", loaded_before.chunk_text)
+
+        store.reindex(
+            [
+                _chunk(
+                    chunk_index=1,
+                    page_number=11,
+                    article_ref="Article 4",
+                    section_ref=None,
+                    text="Nouveau contenu reindexe.",
+                )
+            ]
+        )
+        loaded_after = store.get_by_chunk_id("doc-ai-act:1")
+        self.assertIn("Nouveau contenu", loaded_after.chunk_text)
+        self.assertEqual(loaded_after.metadata.page_number, 11)
+        self.assertEqual(loaded_after.metadata.article_ref, "Article 4")
+
     def test_no_retrieval_or_generation_in_store_module(self) -> None:
         src = Path(__file__).resolve().parents[2] / "app" / "embeddings" / "store.py"
         tree = ast.parse(src.read_text(encoding="utf-8"))

@@ -27,6 +27,7 @@ class VectorStore:
         embedding_service: EmbeddingService | None = None,
     ) -> None:
         self._persist_directory = Path(persist_directory)
+        self._collection_name = collection_name
         self._persist_directory.mkdir(parents=True, exist_ok=True)
         self._embedding_service = embedding_service or EmbeddingService()
         self._client = chromadb.PersistentClient(
@@ -62,6 +63,16 @@ class VectorStore:
             raise RuntimeError(msg) from exc
 
         logger.info("Indexation Chroma | chunks=%s", len(chunks))
+
+    def reindex(self, chunks: list[DocumentChunk]) -> None:
+        """Reindexe proprement le corpus en recreant la collection."""
+        try:
+            self._client.delete_collection(name=self._collection_name)
+        except Exception:
+            # Collection absente: aucun blocage, on recree juste ensuite.
+            pass
+        self._collection = self._client.get_or_create_collection(name=self._collection_name)
+        self.index(chunks)
 
     def get_by_chunk_id(self, chunk_id: str) -> DocumentChunk:
         """Relit un chunk indexé, avec reconstruction des métadonnées source."""
@@ -151,6 +162,7 @@ class VectorStore:
         return {
             "document_id": metadata.document_id,
             "chunk_index": metadata.chunk_index,
+            "embedding_strategy": self._embedding_service.strategy,
             "metadata_json": json.dumps(payload, ensure_ascii=True, separators=(",", ":")),
         }
 
