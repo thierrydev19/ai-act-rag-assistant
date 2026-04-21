@@ -1,2 +1,4 @@
 pypdf>=5.0,<6
 chromadb
+fastapi
+uvicorn

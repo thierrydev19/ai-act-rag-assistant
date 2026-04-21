@@ -17,3 +17,12 @@ MVP vitrine d’assistant documentaire AI Act fondé sur une architecture RAG tr
 
 ## Règle
 Le développement se fait par lots Cursor validés par pilotage CTO.
+
+## Lancement API locale (lot W1)
+
+- Installer les dépendances: `python -m pip install -r requirements.txt`
+- Lancer le backend web: `uvicorn app.api.main:app --reload`
+- Endpoints minimum:
+  - `GET /health`
+  - `GET /api/demo-cases`
+  - `POST /api/ask`
