@@ -286,9 +286,11 @@ def _light_stem(token: str) -> str:
 def _response_quality(answer_text: str) -> str:
     required_sections = (
         "1. Reponse simple",
-        "2. Ce qu'il faut verifier",
-        "3. Sources",
-        "4. Limites",
+        "2. Ce que cela veut dire pour votre entreprise",
+        "3. Ce qu'il faut verifier",
+        "4. Ce qui reste incertain",
+        "5. Sources",
+        "6. Limites",
     )
     present = sum(1 for marker in required_sections if marker in answer_text)
     if present == len(required_sections):

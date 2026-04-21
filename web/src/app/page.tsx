@@ -181,7 +181,12 @@ export default function Home() {
           <p className="mb-4 text-sm text-zinc-600">{result.retrieval_message}</p>
 
           <ResultBlock title="Reponse simple" items={[result.answer_simple]} />
+          <ResultBlock
+            title="Ce que cela veut dire pour votre entreprise"
+            items={result.business_impact}
+          />
           <ResultBlock title="Ce qu'il faut verifier" items={result.checks} />
+          <ResultBlock title="Ce qui reste incertain" items={result.uncertainties} />
           <ResultBlock title="Sources" items={result.sources} />
           <ResultBlock title="Limites" items={result.limits} />
         </section>

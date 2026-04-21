@@ -10,8 +10,11 @@ export type AskResponse = {
   retrieval_status: string;
   retrieval_message: string;
   refusal: boolean;
+  intent: string;
   answer_simple: string;
+  business_impact: string[];
   checks: string[];
+  uncertainties: string[];
   sources: string[];
   limits: string[];
 };
@@ -32,7 +35,11 @@ export async function fetchDemoCases(): Promise<DemoCase[]> {
     method: "GET",
     cache: "no-store",
   });
-  return parseJsonOrThrow<DemoCase[]>(response);
+  const payload = await parseJsonOrThrow<DemoCase[]>(response);
+  if (!Array.isArray(payload) || payload.length === 0) {
+    throw new Error("Aucun cas de demo recu depuis l'API.");
+  }
+  return payload;
 }
 
 export async function askQuestion(question: string): Promise<AskResponse> {

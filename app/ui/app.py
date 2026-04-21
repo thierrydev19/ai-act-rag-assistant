@@ -32,6 +32,7 @@ class UiTurnView:
     answer_text: str
     citations: list[str]
     refusal: bool
+    intent: str
     retrieval_status: str
     retrieval_message: str
 
@@ -64,6 +65,7 @@ class ShowcaseUI:
             answer_text=answer.answer_text,
             citations=answer.citations,
             refusal=answer.refusal,
+            intent=answer.intent,
             retrieval_status=retrieval_result.status,
             retrieval_message=retrieval_result.message,
         )

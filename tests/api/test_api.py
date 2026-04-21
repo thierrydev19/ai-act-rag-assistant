@@ -40,8 +40,11 @@ class _FakeBackend:
                 "retrieval_status": "insufficient",
                 "retrieval_message": "Question vide: retrieval impossible.",
                 "refusal": True,
+                "intent": "limites_conclusion",
                 "answer_simple": "Je ne peux pas conclure de maniere fiable.",
+                "business_impact": ["Ne pas prendre de decision definitive."],
                 "checks": ["Reformuler la question."],
+                "uncertainties": ["Informations insuffisantes dans le corpus."],
                 "sources": [],
                 "limits": ["Pas d'avis juridique definitif."],
             }
@@ -51,8 +54,11 @@ class _FakeBackend:
                 "retrieval_status": "insufficient",
                 "retrieval_message": "Extraits trouves mais pertinence insuffisante.",
                 "refusal": True,
+                "intent": "limites_conclusion",
                 "answer_simple": "Je ne peux pas conclure de maniere fiable.",
+                "business_impact": ["Ne pas conclure sans verification supplementaire."],
                 "checks": ["Preciser le perimetre de la question."],
+                "uncertainties": ["Le cas depasse le corpus charge."],
                 "sources": [],
                 "limits": ["Corpus insuffisant pour conclure."],
             }
@@ -61,8 +67,11 @@ class _FakeBackend:
             "retrieval_status": "sufficient",
             "retrieval_message": "Extraits pertinents recuperes.",
             "refusal": False,
+            "intent": "transparence_information",
             "answer_simple": "Des obligations de transparence existent pour certains systemes IA.",
+            "business_impact": ["Preparer une information claire pour les utilisateurs."],
             "checks": ["Verifier le perimetre d'application."],
+            "uncertainties": ["La qualification precise depend de votre usage."],
             "sources": ["AI Act - Article 13 - page 52"],
             "limits": ["Pas d'avis juridique definitif."],
         }
@@ -140,6 +149,34 @@ class TestApi(unittest.TestCase):
         joined = "\n".join(imports).lower()
         self.assertNotIn("auth", joined)
         self.assertNotIn("saas", joined)
+
+    def test_options_preflight_is_allowed_for_local_frontend(self) -> None:
+        response = self.client.options(
+            "/api/ask",
+            headers={
+                "Origin": "http://localhost:3000",
+                "Access-Control-Request-Method": "POST",
+            },
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(
+            response.headers.get("access-control-allow-origin"),
+            "http://localhost:3000",
+        )
+
+    def test_options_preflight_is_allowed_for_loopback_frontend(self) -> None:
+        response = self.client.options(
+            "/api/ask",
+            headers={
+                "Origin": "http://127.0.0.1:3000",
+                "Access-Control-Request-Method": "POST",
+            },
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(
+            response.headers.get("access-control-allow-origin"),
+            "http://127.0.0.1:3000",
+        )
 
 
 if __name__ == "__main__":

@@ -72,7 +72,7 @@ class TestE2EFlow(unittest.TestCase):
         self.assertFalse(positive.answer.refusal)
         self.assertGreaterEqual(len(positive.answer.citations), 1)
         self.assertIn("AI Act - Article 13 - page 52", positive.answer.citations[0])
-        self.assertIn("3. Sources", positive.answer.answer_text)
+        self.assertIn("5. Sources", positive.answer.answer_text)
 
         negative = results[1]
         self.assertTrue(negative.answer.refusal)

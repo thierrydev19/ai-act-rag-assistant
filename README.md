@@ -27,10 +27,37 @@ Le développement se fait par lots Cursor validés par pilotage CTO.
   - `GET /api/demo-cases`
   - `POST /api/ask`
 
+### Configuration backend (local + Railway)
+
+- `CORS_ALLOW_ORIGINS` : liste d'origines autorisées séparées par des virgules.
+  - défaut local: `http://localhost:3000,http://127.0.0.1:3000`
+  - exemple Railway: `https://<votre-frontend>.up.railway.app`
+- Lancement backend "production-like":
+  - PowerShell: `$env:PORT=8000; uvicorn app.api.main:app --host 0.0.0.0 --port $env:PORT`
+
 ## Lancement frontend local (lot W2)
 
 - Se placer dans le dossier frontend: `cd web`
 - Installer les dépendances: `npm install`
-- (Optionnel) définir l'URL API: `set NEXT_PUBLIC_API_BASE_URL=http://127.0.0.1:8000`
+- Copier `web/.env.example` en `.env.local`
+- Définir l'URL API: `NEXT_PUBLIC_API_BASE_URL=http://127.0.0.1:8000`
 - Lancer le frontend: `npm run dev`
 - Ouvrir: [http://localhost:3000](http://localhost:3000)
+
+### Frontend "production-like"
+
+- Build: `cd web && npm run build`
+- Start: `cd web && npm run start`
+- Le frontend reste utilisable si `/api/demo-cases` echoue (fallback local des 4 cas de demo).
+
+## Preparation Railway (W3)
+
+- Service backend (FastAPI):
+  - Start command: `uvicorn app.api.main:app --host 0.0.0.0 --port $PORT`
+  - Variables minimales:
+    - `CORS_ALLOW_ORIGINS=https://<frontend-railway>`
+- Service frontend (Next.js):
+  - Build command: `npm run build`
+  - Start command: `npm run start`
+  - Variable:
+    - `NEXT_PUBLIC_API_BASE_URL=https://<backend-railway>`

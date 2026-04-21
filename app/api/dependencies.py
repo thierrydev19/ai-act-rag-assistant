@@ -8,7 +8,14 @@ import re
 from app.ui.app import DemoCase, UiTurnView, create_showcase_ui
 
 _SECTION_RE = re.compile(
-    r"1\.\s*Reponse simple\s*(.*?)\s*2\.\s*Ce qu'il faut verifier\s*(.*?)\s*3\.\s*Sources\s*(.*?)\s*4\.\s*Limites\s*(.*)",
+    (
+        r"1\.\s*Reponse simple\s*(.*?)\s*"
+        r"2\.\s*Ce que cela veut dire pour votre entreprise\s*(.*?)\s*"
+        r"3\.\s*Ce qu'il faut verifier\s*(.*?)\s*"
+        r"4\.\s*Ce qui reste incertain\s*(.*?)\s*"
+        r"5\.\s*Sources\s*(.*?)\s*"
+        r"6\.\s*Limites\s*(.*)"
+    ),
     re.DOTALL,
 )
 
@@ -33,34 +40,44 @@ class ApiBackendService:
     def ask(self, question: str) -> dict:
         self.ensure_initialized()
         view: UiTurnView = self._ui.ask(question)
-        answer_simple, checks, sources_from_text, limits = self._split_answer_sections(
-            view.answer_text
-        )
+        (
+            answer_simple,
+            business_impact,
+            checks,
+            uncertainties,
+            sources_from_text,
+            limits,
+        ) = self._split_answer_sections(view.answer_text)
         sources = view.citations if view.citations else sources_from_text
         return {
             "question": view.question,
             "retrieval_status": view.retrieval_status,
             "retrieval_message": view.retrieval_message,
             "refusal": view.refusal,
+            "intent": view.intent,
             "answer_simple": answer_simple,
+            "business_impact": business_impact,
             "checks": checks,
+            "uncertainties": uncertainties,
             "sources": sources,
             "limits": limits,
         }
 
     def _split_answer_sections(
         self, answer_text: str
-    ) -> tuple[str, list[str], list[str], list[str]]:
+    ) -> tuple[str, list[str], list[str], list[str], list[str], list[str]]:
         text = (answer_text or "").strip()
         match = _SECTION_RE.search(text)
         if not match:
-            return text, [], [], []
+            return text, [], [], [], [], []
 
         answer_simple = match.group(1).strip()
-        checks = self._to_bullets(match.group(2))
-        sources = self._to_bullets(match.group(3))
-        limits = self._to_bullets(match.group(4))
-        return answer_simple, checks, sources, limits
+        business_impact = self._to_bullets(match.group(2))
+        checks = self._to_bullets(match.group(3))
+        uncertainties = self._to_bullets(match.group(4))
+        sources = self._to_bullets(match.group(5))
+        limits = self._to_bullets(match.group(6))
+        return answer_simple, business_impact, checks, uncertainties, sources, limits
 
     def _to_bullets(self, block: str) -> list[str]:
         lines = [line.strip() for line in (block or "").splitlines()]

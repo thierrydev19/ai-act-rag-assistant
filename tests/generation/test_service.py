@@ -64,10 +64,13 @@ class TestGenerationService(unittest.TestCase):
         )
         self.assertFalse(payload.refusal)
         self.assertIn("1. Reponse simple", payload.answer_text)
-        self.assertIn("2. Ce qu'il faut verifier", payload.answer_text)
-        self.assertIn("3. Sources", payload.answer_text)
-        self.assertIn("4. Limites", payload.answer_text)
+        self.assertIn("2. Ce que cela veut dire pour votre entreprise", payload.answer_text)
+        self.assertIn("3. Ce qu'il faut verifier", payload.answer_text)
+        self.assertIn("4. Ce qui reste incertain", payload.answer_text)
+        self.assertIn("5. Sources", payload.answer_text)
+        self.assertIn("6. Limites", payload.answer_text)
         self.assertEqual(len(payload.citations), 2)
+        self.assertEqual(payload.intent, "transparence_information")
         self.assertIn("AI Act - Article 13 - page 52", payload.citations[0])
         self.assertIn("AI Act - Article 16 - page 60-61", payload.citations[1])
 
@@ -84,6 +87,7 @@ class TestGenerationService(unittest.TestCase):
             context=context,
         )
         self.assertTrue(payload.refusal)
+        self.assertEqual(payload.intent, "limites_conclusion")
         self.assertEqual(payload.citations, [])
         self.assertIn("Je ne peux pas conclure de maniere fiable", payload.answer_text)
         self.assertIn("Aucune source suffisamment pertinente", payload.answer_text)
@@ -108,6 +112,7 @@ class TestGenerationService(unittest.TestCase):
             question=UserQuestion(text="Que dit le texte sur ce point ?"),
             context=context,
         )
+        self.assertEqual(payload.intent, "limites_conclusion")
         self.assertIn("AI Act - page 222", payload.citations[0])
         self.assertNotIn("Article", payload.citations[0])
 
@@ -145,6 +150,77 @@ class TestGenerationService(unittest.TestCase):
         self.assertNotIn("auth", joined)
         self.assertNotIn("openai", joined)
         self.assertNotIn("anthropic", joined)
+
+    def test_refusal_for_out_of_scope_business_or_legal_advice(self) -> None:
+        svc = GenerationService()
+        context = RetrievalResult(
+            chunks=[
+                _chunk(
+                    chunk_index=1,
+                    text="Extrait quelconque.",
+                    page_number=10,
+                    article_ref="Article 3",
+                )
+            ],
+            is_sufficient=True,
+            status="sufficient",
+            message="ok",
+        )
+        payload = svc.generate(
+            question=UserQuestion(text="Quel est le meilleur choix de fournisseur pour ma strategie commerciale ?"),
+            context=context,
+        )
+        self.assertTrue(payload.refusal)
+        self.assertEqual(payload.intent, "limites_conclusion")
+        self.assertEqual(payload.citations, [])
+        self.assertIn("hors perimetre documentaire", payload.answer_text)
+
+    def test_intent_classification_for_obligations(self) -> None:
+        svc = GenerationService()
+        context = RetrievalResult(
+            chunks=[
+                _chunk(
+                    chunk_index=1,
+                    text="Les obligations des fournisseurs sont detaillees.",
+                    page_number=12,
+                    article_ref="Article 16",
+                )
+            ],
+            is_sufficient=True,
+            status="sufficient",
+            message="ok",
+        )
+        payload = svc.generate(
+            question=UserQuestion(text="Quelles obligations pour notre entreprise ?"),
+            context=context,
+        )
+        self.assertEqual(payload.intent, "obligations_entreprise")
+
+    def test_intent_classification_for_qualification_and_documentation(self) -> None:
+        svc = GenerationService()
+        context = RetrievalResult(
+            chunks=[
+                _chunk(
+                    chunk_index=2,
+                    text="La documentation des systemes IA doit etre maintenue et verifiable.",
+                    page_number=20,
+                    article_ref="Article 11",
+                )
+            ],
+            is_sufficient=True,
+            status="sufficient",
+            message="ok",
+        )
+        payload_qualification = svc.generate(
+            question=UserQuestion(text="Comment qualifier un systeme IA ?"),
+            context=context,
+        )
+        payload_documentation = svc.generate(
+            question=UserQuestion(text="Quelles preuves de documentation faut-il conserver ?"),
+            context=context,
+        )
+        self.assertEqual(payload_qualification.intent, "qualification_systeme")
+        self.assertEqual(payload_documentation.intent, "documentation_preuves")
 
 
 if __name__ == "__main__":

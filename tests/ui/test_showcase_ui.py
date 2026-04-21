@@ -70,7 +70,9 @@ class TestShowcaseUI(unittest.TestCase):
         self.assertGreaterEqual(len(positive.citations), 1)
         self.assertIn("AI Act - Article 13 - page 52", positive.citations[0])
         self.assertIn("1. Reponse simple", positive.answer_text)
-        self.assertIn("4. Limites", positive.answer_text)
+        self.assertIn("6. Limites", positive.answer_text)
+        self.assertIn("2. Ce que cela veut dire pour votre entreprise", positive.answer_text)
+        self.assertIn("4. Ce qui reste incertain", positive.answer_text)
 
         refusal = ui.ask("Quel est le cadre fiscal mondial de l'IA par pays ?")
         self.assertTrue(refusal.refusal)
