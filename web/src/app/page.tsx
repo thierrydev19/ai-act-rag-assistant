@@ -163,7 +163,7 @@ export default function Home() {
       ) : null}
 
       {result ? (
-        <section className="mt-6 rounded-2xl border border-zinc-200 bg-white p-6 shadow-sm">
+        <section className="mt-8 rounded-2xl border border-zinc-200 bg-white p-7 shadow-sm md:p-8">
           <div className="mb-4 flex flex-wrap items-center gap-2 text-xs">
             <span className="rounded-full bg-zinc-100 px-3 py-1 font-medium text-zinc-700">
               retrieval: {result.retrieval_status}
@@ -177,18 +177,25 @@ export default function Home() {
                 reponse sourcée
               </span>
             )}
+            <span className="rounded-full bg-indigo-50 px-3 py-1 font-medium text-indigo-700">
+              cas metier: {result.business_case}
+            </span>
           </div>
-          <p className="mb-4 text-sm text-zinc-600">{result.retrieval_message}</p>
+          <p className="mb-6 whitespace-pre-wrap text-sm text-zinc-600">
+            {result.retrieval_message}
+          </p>
 
-          <ResultBlock title="Reponse simple" items={[result.answer_simple]} />
-          <ResultBlock
-            title="Ce que cela veut dire pour votre entreprise"
-            items={result.business_impact}
-          />
-          <ResultBlock title="Ce qu'il faut verifier" items={result.checks} />
-          <ResultBlock title="Ce qui reste incertain" items={result.uncertainties} />
-          <ResultBlock title="Sources" items={result.sources} />
-          <ResultBlock title="Limites" items={result.limits} />
+          <div className="space-y-6 md:space-y-7">
+            <ResultBlock title="Reponse simple" items={[result.answer_simple]} />
+            <ResultBlock
+              title="Ce que cela veut dire pour votre entreprise"
+              items={result.business_impact}
+            />
+            <ResultBlock title="Ce qu'il faut verifier" items={result.checks} />
+            <ResultBlock title="Ce qui reste incertain" items={result.uncertainties} />
+            <ResultBlock title="Sources" items={result.sources} />
+            <ResultBlock title="Limites" items={result.limits} />
+          </div>
         </section>
       ) : null}
     </main>
@@ -197,16 +204,24 @@ export default function Home() {
 
 function ResultBlock({ title, items }: { title: string; items: string[] }) {
   return (
-    <section className="mb-5">
-      <h3 className="mb-2 text-base font-semibold text-zinc-900">{title}</h3>
+    <section className="rounded-xl border border-zinc-200 bg-white p-5 shadow-sm">
+      <h3 className="mb-4 border-b border-zinc-100 pb-2 text-base font-semibold text-zinc-900">
+        {title}
+      </h3>
       {items.length > 0 ? (
-        <ul className="space-y-2">
+        <ul className="space-y-4">
           {items.map((item, index) => (
             <li
               key={`${title}-${index}`}
-              className="rounded-lg border border-zinc-200 bg-zinc-50 px-3 py-2 text-sm leading-6 text-zinc-700"
+              className="rounded-lg border border-zinc-200 bg-zinc-50 px-4 py-3 text-sm leading-7 text-zinc-700"
             >
-              {item}
+              <div className="space-y-2">
+                {item.split("\n").map((line, lineIdx) => (
+                  <p key={`${title}-${index}-${lineIdx}`} className="whitespace-pre-wrap">
+                    {line}
+                  </p>
+                ))}
+              </div>
             </li>
           ))}
         </ul>

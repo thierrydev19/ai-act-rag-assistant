@@ -55,6 +55,7 @@ class ApiBackendService:
             "retrieval_message": view.retrieval_message,
             "refusal": view.refusal,
             "intent": view.intent,
+            "business_case": view.business_case,
             "answer_simple": answer_simple,
             "business_impact": business_impact,
             "checks": checks,

@@ -41,6 +41,7 @@ class _FakeBackend:
                 "retrieval_message": "Question vide: retrieval impossible.",
                 "refusal": True,
                 "intent": "limites_conclusion",
+                "business_case": "generic",
                 "answer_simple": "Je ne peux pas conclure de maniere fiable.",
                 "business_impact": ["Ne pas prendre de decision definitive."],
                 "checks": ["Reformuler la question."],
@@ -55,6 +56,7 @@ class _FakeBackend:
                 "retrieval_message": "Extraits trouves mais pertinence insuffisante.",
                 "refusal": True,
                 "intent": "limites_conclusion",
+                "business_case": "generic",
                 "answer_simple": "Je ne peux pas conclure de maniere fiable.",
                 "business_impact": ["Ne pas conclure sans verification supplementaire."],
                 "checks": ["Preciser le perimetre de la question."],
@@ -68,6 +70,7 @@ class _FakeBackend:
             "retrieval_message": "Extraits pertinents recuperes.",
             "refusal": False,
             "intent": "transparence_information",
+            "business_case": "service_client",
             "answer_simple": "Des obligations de transparence existent pour certains systemes IA.",
             "business_impact": ["Preparer une information claire pour les utilisateurs."],
             "checks": ["Verifier le perimetre d'application."],
@@ -112,6 +115,7 @@ class TestApi(unittest.TestCase):
         payload = response.json()
         self.assertEqual(payload["retrieval_status"], "sufficient")
         self.assertFalse(payload["refusal"])
+        self.assertEqual(payload["business_case"], "service_client")
         self.assertGreaterEqual(len(payload["sources"]), 1)
         self.assertTrue(payload["answer_simple"])
 
@@ -124,6 +128,7 @@ class TestApi(unittest.TestCase):
         payload = response.json()
         self.assertEqual(payload["retrieval_status"], "insufficient")
         self.assertTrue(payload["refusal"])
+        self.assertEqual(payload["business_case"], "generic")
         self.assertEqual(payload["sources"], [])
 
     def test_post_ask_empty_question(self) -> None:
@@ -132,6 +137,7 @@ class TestApi(unittest.TestCase):
         payload = response.json()
         self.assertEqual(payload["retrieval_status"], "insufficient")
         self.assertTrue(payload["refusal"])
+        self.assertEqual(payload["business_case"], "generic")
         self.assertIn("Question vide", payload["retrieval_message"])
 
     def test_no_auth_saas_in_api_routes(self) -> None:

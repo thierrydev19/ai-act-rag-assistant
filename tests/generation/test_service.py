@@ -71,8 +71,12 @@ class TestGenerationService(unittest.TestCase):
         self.assertIn("6. Limites", payload.answer_text)
         self.assertEqual(len(payload.citations), 2)
         self.assertEqual(payload.intent, "transparence_information")
+        self.assertEqual(payload.business_case, "generic")
         self.assertIn("AI Act - Article 13 - page 52", payload.citations[0])
         self.assertIn("AI Act - Article 16 - page 60-61", payload.citations[1])
+        simple_block = payload.answer_text.split("2. Ce que cela veut dire pour votre entreprise")[0]
+        self.assertLessEqual(len(simple_block.splitlines()), 4)
+        self.assertNotIn("Les extraits retrouves indiquent les points suivants", simple_block)
 
     def test_refusal_when_context_is_insufficient(self) -> None:
         svc = GenerationService()
@@ -88,6 +92,7 @@ class TestGenerationService(unittest.TestCase):
         )
         self.assertTrue(payload.refusal)
         self.assertEqual(payload.intent, "limites_conclusion")
+        self.assertEqual(payload.business_case, "generic")
         self.assertEqual(payload.citations, [])
         self.assertIn("Je ne peux pas conclure de maniere fiable", payload.answer_text)
         self.assertIn("Aucune source suffisamment pertinente", payload.answer_text)
@@ -109,10 +114,11 @@ class TestGenerationService(unittest.TestCase):
             message="ok",
         )
         payload = svc.generate(
-            question=UserQuestion(text="Que dit le texte sur ce point ?"),
+            question=UserQuestion(text="Que dit le texte sur cette disposition generale ?"),
             context=context,
         )
         self.assertEqual(payload.intent, "limites_conclusion")
+        self.assertEqual(payload.business_case, "generic")
         self.assertIn("AI Act - page 222", payload.citations[0])
         self.assertNotIn("Article", payload.citations[0])
 
@@ -175,6 +181,87 @@ class TestGenerationService(unittest.TestCase):
         self.assertEqual(payload.citations, [])
         self.assertIn("hors perimetre documentaire", payload.answer_text)
 
+    def test_refusal_for_out_of_scope_tax_question(self) -> None:
+        svc = GenerationService()
+        context = RetrievalResult(
+            chunks=[
+                _chunk(
+                    chunk_index=1,
+                    text="Extrait proche mais non fiscal.",
+                    page_number=10,
+                    article_ref="Article 3",
+                )
+            ],
+            is_sufficient=True,
+            status="sufficient",
+            message="ok",
+        )
+        payload = svc.generate(
+            question=UserQuestion(text="Quel est le regime fiscal mondial de l'IA ?"),
+            context=context,
+        )
+        self.assertTrue(payload.refusal)
+        self.assertIn("Je ne peux pas conclure de maniere fiable", payload.answer_text)
+        self.assertEqual(payload.citations, [])
+
+    def test_business_case_detection_for_four_categories_and_generic(self) -> None:
+        svc = GenerationService()
+        context = RetrievalResult(
+            chunks=[
+                _chunk(
+                    chunk_index=10,
+                    text="Les obligations imposent des informations claires aux utilisateurs.",
+                    page_number=52,
+                    article_ref="Article 13",
+                )
+            ],
+            is_sufficient=True,
+            status="sufficient",
+            message="ok",
+        )
+        self.assertEqual(
+            svc.generate(
+                question=UserQuestion(text="En RH recrutement, que doit-on faire ?"),
+                context=context,
+            ).business_case,
+            "rh_recrutement",
+        )
+        self.assertEqual(
+            svc.generate(
+                question=UserQuestion(text="Pour notre service client avec chatbot, quelles obligations ?"),
+                context=context,
+            ).business_case,
+            "service_client",
+        )
+        self.assertEqual(
+            svc.generate(
+                question=UserQuestion(text="Usage de biometrie pour controle d'acces, que verifier ?"),
+                context=context,
+            ).business_case,
+            "biometrie_surveillance_controle_acces",
+        )
+        self.assertEqual(
+            svc.generate(
+                question=UserQuestion(text="Nous faisons du scoring de decision automatisee, quelles precautions ?"),
+                context=context,
+            ).business_case,
+            "scoring_decision_automatisee",
+        )
+        self.assertEqual(
+            svc.generate(
+                question=UserQuestion(text="Quelles obligations de transparence devons-nous respecter ?"),
+                context=context,
+            ).business_case,
+            "generic",
+        )
+        self.assertEqual(
+            svc.generate(
+                question=UserQuestion(text="Notre PME utilise une IA pour trier des CV, est-ce concerne ?"),
+                context=context,
+            ).business_case,
+            "rh_recrutement",
+        )
+
     def test_intent_classification_for_obligations(self) -> None:
         svc = GenerationService()
         context = RetrievalResult(
@@ -195,6 +282,12 @@ class TestGenerationService(unittest.TestCase):
             context=context,
         )
         self.assertEqual(payload.intent, "obligations_entreprise")
+        self.assertIn("Vos obligations dependent d'abord de votre role exact", payload.answer_text)
+        self.assertIn("Role de l'entreprise:", payload.answer_text)
+        self.assertIn("Type de systeme et contexte d'usage:", payload.answer_text)
+        self.assertIn("Familles d'obligations a verifier:", payload.answer_text)
+        self.assertIn("Conditions avant conclusion:", payload.answer_text)
+        self.assertNotIn("actions de conformite potentielles", payload.answer_text)
 
     def test_intent_classification_for_qualification_and_documentation(self) -> None:
         svc = GenerationService()
@@ -221,6 +314,281 @@ class TestGenerationService(unittest.TestCase):
         )
         self.assertEqual(payload_qualification.intent, "qualification_systeme")
         self.assertEqual(payload_documentation.intent, "documentation_preuves")
+
+    def test_minimal_target_questions_cover_transparency_qualification_obligations_and_refusal(self) -> None:
+        svc = GenerationService()
+        context = RetrievalResult(
+            chunks=[
+                _chunk(
+                    chunk_index=21,
+                    text="Le reglement prevoit des obligations de transparence et de documentation.",
+                    page_number=52,
+                    article_ref="Article 13",
+                ),
+                _chunk(
+                    chunk_index=22,
+                    text="La qualification depend notamment de l'usage concret et du role de l'entreprise.",
+                    page_number=60,
+                    article_ref="Article 16",
+                ),
+            ],
+            is_sufficient=True,
+            status="sufficient",
+            message="ok",
+        )
+        p1 = svc.generate(
+            question=UserQuestion(text="Quelles obligations de transparence devons-nous respecter ?"),
+            context=context,
+        )
+        p2 = svc.generate(
+            question=UserQuestion(text="Comment qualifier notre systeme d'IA ?"),
+            context=context,
+        )
+        p3 = svc.generate(
+            question=UserQuestion(text="Quelles obligations avons-nous en tant qu'entreprise ?"),
+            context=context,
+        )
+        p4 = svc.generate(
+            question=UserQuestion(text="Quel est le regime fiscal mondial de l'IA ?"),
+            context=context,
+        )
+        self.assertFalse(p1.refusal)
+        self.assertFalse(p2.refusal)
+        self.assertFalse(p3.refusal)
+        self.assertTrue(p4.refusal)
+
+    def test_refusal_for_semantic_parasite_neighbors(self) -> None:
+        svc = GenerationService(max_citations=2)
+        context = RetrievalResult(
+            chunks=[
+                _chunk(
+                    chunk_index=31,
+                    text="Les obligations de transparence concernent les informations aux utilisateurs.",
+                    page_number=52,
+                    article_ref="Article 13",
+                ),
+                _chunk(
+                    chunk_index=32,
+                    text="La documentation technique est requise pour certains systemes.",
+                    page_number=61,
+                    article_ref="Article 16",
+                ),
+            ],
+            is_sufficient=True,
+            status="sufficient",
+            message="ok",
+        )
+        payload = svc.generate(
+            question=UserQuestion(text="Comment organiser notre politique de remuneration variable des commerciaux ?"),
+            context=context,
+        )
+        self.assertTrue(payload.refusal)
+        self.assertIn("semantiquement voisins", payload.answer_text)
+
+    def test_sections_3_4_6_are_not_mechanical_between_cases(self) -> None:
+        svc = GenerationService()
+        context = RetrievalResult(
+            chunks=[
+                _chunk(
+                    chunk_index=41,
+                    text="Des informations claires doivent etre fournies aux utilisateurs.",
+                    page_number=52,
+                    article_ref="Article 13",
+                ),
+                _chunk(
+                    chunk_index=42,
+                    text="Les decisions automatisees sensibles doivent inclure un controle humain et une tracabilite des criteres.",
+                    page_number=61,
+                    article_ref="Article 16",
+                ),
+            ],
+            is_sufficient=True,
+            status="sufficient",
+            message="ok",
+        )
+        rh = svc.generate(
+            question=UserQuestion(text="En RH recrutement, quelles obligations de transparence ?"),
+            context=context,
+        )
+        scoring = svc.generate(
+            question=UserQuestion(text="En scoring de decision automatisee, que faut-il verifier ?"),
+            context=context,
+        )
+        self.assertNotEqual(rh.answer_text, scoring.answer_text)
+        self.assertIn("decision RH", rh.answer_text)
+        self.assertIn("Elements a verifier selon votre role", scoring.answer_text)
+
+    def test_simple_answer_uses_core_evidence_not_parasite_chunk(self) -> None:
+        svc = GenerationService(max_citations=3)
+        context = RetrievalResult(
+            chunks=[
+                _chunk(
+                    chunk_index=51,
+                    text="Les sanctions administratives maximales sont prevues dans les dispositions finales.",
+                    page_number=261,
+                    article_ref="Article 99",
+                ),
+                _chunk(
+                    chunk_index=52,
+                    text="Les obligations de transparence imposent des informations claires aux utilisateurs.",
+                    page_number=52,
+                    article_ref="Article 13",
+                ),
+                _chunk(
+                    chunk_index=53,
+                    text="Les fournisseurs de systemes a haut risque maintiennent une documentation technique.",
+                    page_number=60,
+                    article_ref="Article 16",
+                ),
+            ],
+            is_sufficient=True,
+            status="sufficient",
+            message="ok",
+        )
+        payload = svc.generate(
+            question=UserQuestion(text="Quelles obligations de transparence devons-nous respecter ?"),
+            context=context,
+        )
+        self.assertFalse(payload.refusal)
+        self.assertIn("informations claires", payload.answer_text)
+        self.assertNotIn("sanctions administratives maximales", payload.answer_text)
+
+    def test_document_request_gets_factual_conditioned_checks(self) -> None:
+        svc = GenerationService(max_citations=2)
+        context = RetrievalResult(
+            chunks=[
+                _chunk(
+                    chunk_index=61,
+                    text="Les obligations de transparence imposent des informations claires aux utilisateurs.",
+                    page_number=52,
+                    article_ref="Article 13",
+                ),
+                _chunk(
+                    chunk_index=62,
+                    text="Les fournisseurs de systemes IA a haut risque tiennent une documentation technique et des traces de supervision.",
+                    page_number=60,
+                    article_ref="Article 16",
+                ),
+            ],
+            is_sufficient=True,
+            status="sufficient",
+            message="ok",
+        )
+        payload = svc.generate(
+            question=UserQuestion(text="Pour notre service client avec chatbot IA, que faut-il verifier ?"),
+            context=context,
+        )
+        self.assertFalse(payload.refusal)
+        self.assertIn("Documents / informations a fournir", payload.answer_text)
+        self.assertIn("Preuves / traces / logs a conserver", payload.answer_text)
+        self.assertIn("Elements a verifier selon votre role", payload.answer_text)
+        self.assertIn("Conditions prealables avant de conclure", payload.answer_text)
+
+    def test_obligations_response_remains_prudent_and_not_universal_checklist(self) -> None:
+        svc = GenerationService(max_citations=2)
+        context = RetrievalResult(
+            chunks=[
+                _chunk(
+                    chunk_index=95,
+                    text="Les obligations dependent du role de l'entreprise dans la chaine de valeur IA.",
+                    page_number=74,
+                    article_ref="Article 26",
+                ),
+                _chunk(
+                    chunk_index=96,
+                    text="La qualification et le niveau de risque conditionnent l'etendue des obligations applicables.",
+                    page_number=18,
+                    article_ref="Article 3",
+                ),
+            ],
+            is_sufficient=True,
+            status="sufficient",
+            message="ok",
+        )
+        payload = svc.generate(
+            question=UserQuestion(text="Quelles obligations avons-nous en tant qu'entreprise ?"),
+            context=context,
+        )
+        self.assertFalse(payload.refusal)
+        self.assertIn("pas comme une liste universelle", payload.answer_text)
+        self.assertIn("avant toute conclusion ferme", payload.answer_text)
+
+    def test_document_request_without_high_risk_is_explicitly_limited(self) -> None:
+        svc = GenerationService(max_citations=1)
+        context = RetrievalResult(
+            chunks=[
+                _chunk(
+                    chunk_index=71,
+                    text="Les obligations de transparence imposent des informations claires aux utilisateurs.",
+                    page_number=52,
+                    article_ref="Article 13",
+                )
+            ],
+            is_sufficient=True,
+            status="sufficient",
+            message="ok",
+        )
+        payload = svc.generate(
+            question=UserQuestion(text="Pour notre service client avec chatbot IA, que faut-il verifier ?"),
+            context=context,
+        )
+        self.assertFalse(payload.refusal)
+        self.assertIn("ne permet pas d'affirmer que les documents high-risk sont obligatoires", payload.answer_text)
+        self.assertIn("ne constituent pas une checklist universelle", payload.answer_text)
+
+    def test_mismatch_intent_core_evidence_triggers_refusal(self) -> None:
+        svc = GenerationService(max_citations=2)
+        context = RetrievalResult(
+            chunks=[
+                _chunk(
+                    chunk_index=81,
+                    text="Les utilisateurs doivent etre informes de l'interaction avec une IA.",
+                    page_number=52,
+                    article_ref="Article 13",
+                )
+            ],
+            is_sufficient=True,
+            status="sufficient",
+            message="ok",
+        )
+        payload = svc.generate(
+            question=UserQuestion(text="Comment qualifier notre systeme d'IA ?"),
+            context=context,
+        )
+        self.assertTrue(payload.refusal)
+        self.assertTrue(
+            "insuffisamment alignes avec l'intention" in payload.answer_text
+            or "Aucun noyau documentaire coherent" in payload.answer_text
+        )
+
+    def test_role_question_prefers_role_evidence(self) -> None:
+        svc = GenerationService(max_citations=2)
+        context = RetrievalResult(
+            chunks=[
+                _chunk(
+                    chunk_index=91,
+                    text="Les utilisateurs doivent etre informes de l'interaction avec une IA.",
+                    page_number=52,
+                    article_ref="Article 13",
+                ),
+                _chunk(
+                    chunk_index=92,
+                    text="Le role de deployeur determine des obligations distinctes de celles du fournisseur.",
+                    page_number=74,
+                    article_ref="Article 26",
+                ),
+            ],
+            is_sufficient=True,
+            status="sufficient",
+            message="ok",
+        )
+        payload = svc.generate(
+            question=UserQuestion(text="Quel est notre role d'entreprise entre fournisseur et deployeur ?"),
+            context=context,
+        )
+        self.assertFalse(payload.refusal)
+        self.assertIn("role", payload.answer_text.lower())
+        self.assertIn("AI Act - Article 26 - page 74", payload.citations[0])
 
 
 if __name__ == "__main__":

@@ -26,6 +26,7 @@ class AskResponse(BaseModel):
     retrieval_message: str
     refusal: bool
     intent: str
+    business_case: str
     answer_simple: str
     business_impact: list[str]
     checks: list[str]

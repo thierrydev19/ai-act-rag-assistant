@@ -11,6 +11,7 @@ export type AskResponse = {
   retrieval_message: string;
   refusal: boolean;
   intent: string;
+  business_case: string;
   answer_simple: string;
   business_impact: string[];
   checks: string[];

@@ -67,6 +67,7 @@ class TestShowcaseUI(unittest.TestCase):
         )
         positive = ui.ask("Quelles obligations de transparence pour les systemes IA ?")
         self.assertFalse(positive.refusal)
+        self.assertEqual(positive.business_case, "generic")
         self.assertGreaterEqual(len(positive.citations), 1)
         self.assertIn("AI Act - Article 13 - page 52", positive.citations[0])
         self.assertIn("1. Reponse simple", positive.answer_text)
@@ -76,6 +77,7 @@ class TestShowcaseUI(unittest.TestCase):
 
         refusal = ui.ask("Quel est le cadre fiscal mondial de l'IA par pays ?")
         self.assertTrue(refusal.refusal)
+        self.assertEqual(refusal.business_case, "generic")
         self.assertEqual(refusal.citations, [])
         self.assertIn("Je ne peux pas conclure de maniere fiable", refusal.answer_text)
 
