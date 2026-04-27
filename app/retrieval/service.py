@@ -1,6 +1,31 @@
-"""Service de retrieval semantique (lot 6, calibre R2)."""
+"""Service de retrieval semantique (lot 6, recalibre V3-3a pour sentence-transformers).
+
+Histoire des calibrations :
+- V1 (hashing_v2 ; remediation R2) : seuils calibres sur l'echelle des distances
+  produites par hashing local (typiquement 0.0 a 1.8 sur ce corpus).
+  max_acceptable_distance=1.35, relaxed_max_distance=1.7, min_lexical_overlap=0.08,
+  min_combined_score=0.14.
+
+- V3-3a (sentence-transformers/MiniLM L12 v2 multilingue, normalise L2) :
+  les distances cosine restent dans [0.3, 1.2] sur le corpus AI Act 144 pages.
+  Recalibration basee sur 15 questions de la grille canonique :
+  - 8 positives : distances 0.39 a 0.96, combined 0.39 a 0.74
+  - 3 limites : distances 0.61 a 0.96, combined 0.43 a 0.48
+  - 4 refus attendus : distances 0.68 a 1.18, combined 0.24 a 0.50
+  La distance seule ne separe pas positifs et refus (chevauchement). Le
+  combined_score le fait mieux : retenir min_combined_score >= 0.42 rejette
+  3 refus sur 4 au retrieval (le 4e est rattrape par le filtrage hors-perimetre
+  en aval).
+
+Variables d'environnement (override pour experimentation sans recompiler) :
+- AI_ACT_RETRIEVAL_MAX_DISTANCE
+- AI_ACT_RETRIEVAL_RELAXED_DISTANCE
+- AI_ACT_RETRIEVAL_MIN_LEXICAL
+- AI_ACT_RETRIEVAL_MIN_COMBINED
+"""
 
 from dataclasses import dataclass
+import os
 import re
 
 from app.embeddings.service import EmbeddingService
@@ -11,30 +36,29 @@ from app.logging.logger import get_logger
 logger = get_logger(__name__)
 _TOKEN_RE = re.compile(r"\w+", re.UNICODE)
 _STOPWORDS = {
-    "de",
-    "du",
-    "des",
-    "la",
-    "le",
-    "les",
-    "un",
-    "une",
-    "et",
-    "ou",
-    "en",
-    "dans",
-    "sur",
-    "pour",
-    "par",
-    "que",
-    "quelles",
-    "quels",
-    "comment",
-    "est",
-    "sont",
-    "aux",
-    "au",
+    "de", "du", "des", "la", "le", "les", "un", "une", "et", "ou",
+    "en", "dans", "sur", "pour", "par", "que", "quelles", "quels",
+    "comment", "est", "sont", "aux", "au",
 }
+
+
+def _env_float(name: str, default: float) -> float:
+    """Lit un seuil depuis une variable d'env, avec fallback silencieux."""
+    raw = os.getenv(name, "").strip()
+    if not raw:
+        return default
+    try:
+        return float(raw)
+    except ValueError:
+        logger.warning("Variable %s invalide (%r), valeur par defaut %s utilisee.", name, raw, default)
+        return default
+
+
+# Defauts V3-3a : calibres pour sentence-transformers normalise L2.
+DEFAULT_MAX_ACCEPTABLE_DISTANCE = _env_float("AI_ACT_RETRIEVAL_MAX_DISTANCE", 1.30)
+DEFAULT_RELAXED_MAX_DISTANCE = _env_float("AI_ACT_RETRIEVAL_RELAXED_DISTANCE", 1.50)
+DEFAULT_MIN_LEXICAL_OVERLAP = _env_float("AI_ACT_RETRIEVAL_MIN_LEXICAL", 0.08)
+DEFAULT_MIN_COMBINED_SCORE = _env_float("AI_ACT_RETRIEVAL_MIN_COMBINED", 0.385)
 
 
 @dataclass(frozen=True)
@@ -56,10 +80,10 @@ class RetrievalService:
         vector_store: VectorStore | None = None,
         embedding_service: EmbeddingService | None = None,
         top_k: int = 5,
-        max_acceptable_distance: float = 1.35,
-        relaxed_max_distance: float = 1.7,
-        min_lexical_overlap: float = 0.08,
-        min_combined_score: float = 0.14,
+        max_acceptable_distance: float = DEFAULT_MAX_ACCEPTABLE_DISTANCE,
+        relaxed_max_distance: float = DEFAULT_RELAXED_MAX_DISTANCE,
+        min_lexical_overlap: float = DEFAULT_MIN_LEXICAL_OVERLAP,
+        min_combined_score: float = DEFAULT_MIN_COMBINED_SCORE,
         candidate_pool_factor: int = 4,
     ) -> None:
         if top_k <= 0:
@@ -179,4 +203,3 @@ class RetrievalService:
         cap = 1.8
         clamped = min(max(distance, 0.0), cap)
         return 1.0 - (clamped / cap)
-
