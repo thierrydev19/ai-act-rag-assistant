@@ -18,6 +18,15 @@ export type AskResponse = {
   uncertainties: string[];
   sources: string[];
   limits: string[];
+  context_needed: boolean;
+  context_questions: string[];
+  context_used: Record<string, string>;
+};
+
+export type AskContext = {
+  usage_case?: string;
+  company_role?: string;
+  impact_level?: string;
 };
 
 const API_BASE_URL =
@@ -43,11 +52,14 @@ export async function fetchDemoCases(): Promise<DemoCase[]> {
   return payload;
 }
 
-export async function askQuestion(question: string): Promise<AskResponse> {
+export async function askQuestion(
+  question: string,
+  context?: AskContext,
+): Promise<AskResponse> {
   const response = await fetch(`${API_BASE_URL}/api/ask`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ question }),
+    body: JSON.stringify({ question, ...(context || {}) }),
   });
   return parseJsonOrThrow<AskResponse>(response);
 }

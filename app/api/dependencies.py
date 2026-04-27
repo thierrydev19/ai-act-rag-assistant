@@ -37,9 +37,30 @@ class ApiBackendService:
         self.ensure_initialized()
         return self._ui.demo_cases
 
-    def ask(self, question: str) -> dict:
+    def ask(
+        self,
+        question: str,
+        *,
+        usage_case: str | None = None,
+        company_role: str | None = None,
+        impact_level: str | None = None,
+    ) -> dict:
         self.ensure_initialized()
-        view: UiTurnView = self._ui.ask(question)
+        context_used = {
+            "usage_case": usage_case or "non_renseigne",
+            "company_role": company_role or "non_renseigne",
+            "impact_level": impact_level or "non_renseigne",
+        }
+        context_needed = self._needs_context(question, context_used)
+        context_questions = self._context_questions(context_used) if context_needed else []
+        view: UiTurnView = self._ui.ask(
+            question,
+            context_hint={
+                "usage_case": usage_case or "",
+                "company_role": company_role or "",
+                "impact_level": impact_level or "",
+            },
+        )
         (
             answer_simple,
             business_impact,
@@ -62,6 +83,9 @@ class ApiBackendService:
             "uncertainties": uncertainties,
             "sources": sources,
             "limits": limits,
+            "context_needed": context_needed,
+            "context_questions": context_questions,
+            "context_used": context_used,
         }
 
     def _split_answer_sections(
@@ -84,6 +108,33 @@ class ApiBackendService:
         lines = [line.strip() for line in (block or "").splitlines()]
         cleaned = [line.removeprefix("-").strip() for line in lines if line.strip()]
         return [line for line in cleaned if line]
+
+    def _needs_context(self, question: str, context_used: dict[str, str]) -> bool:
+        text = (question or "").lower()
+        ambiguous_markers = (
+            "quelles obligations",
+            "sommes-nous concernes",
+            "est-ce concerne",
+            "que devons-nous faire",
+            "que faut-il verifier",
+            "quels documents",
+        )
+        looks_ambiguous = any(marker in text for marker in ambiguous_markers)
+        enough_context = all(
+            context_used[key] not in {"", "non_renseigne", "je_ne_sais_pas"}
+            for key in ("usage_case", "company_role", "impact_level")
+        )
+        return looks_ambiguous and not enough_context
+
+    def _context_questions(self, context_used: dict[str, str]) -> list[str]:
+        questions: list[str] = []
+        if context_used["usage_case"] in {"", "non_renseigne", "je_ne_sais_pas"}:
+            questions.append("Quel est votre cas d'usage principal ?")
+        if context_used["company_role"] in {"", "non_renseigne", "je_ne_sais_pas"}:
+            questions.append("Quel est le role principal de votre entreprise ?")
+        if context_used["impact_level"] in {"", "non_renseigne", "je_ne_sais_pas"}:
+            questions.append("Quel est le niveau d'impact de votre systeme ?")
+        return questions[:3]
 
 
 _backend_singleton = ApiBackendService()

@@ -13,10 +13,16 @@ logger = get_logger(__name__)
 
 
 def mvp_ai_act_french_pdf_path(repo_root: Path | None = None) -> Path:
-    """Chemin du PDF unique MVP (AI Act, français), relatif à la racine du dépôt."""
+    """Chemin du PDF unique MVP : règlement officiel AI Act (UE 2024/1689) en français.
+
+    Source : Journal Officiel de l'Union Européenne, 12/07/2024.
+    URL EUR-Lex : https://eur-lex.europa.eu/legal-content/FR/TXT/PDF/?uri=OJ:L_202401689
+
+    Le fichier doit être placé manuellement dans docs/ (gitignored, ~2.6 Mo, 144 pages).
+    """
     if repo_root is None:
         repo_root = Path(__file__).resolve().parents[2]
-    return repo_root / "docs" / "ToC-AI-Act-French.pdf"
+    return repo_root / "docs" / "AI-Act-FR-Officiel.pdf"
 
 
 class IngestionService:

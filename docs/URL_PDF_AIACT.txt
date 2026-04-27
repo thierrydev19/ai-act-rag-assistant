@@ -1,0 +1,12 @@
+https://eur-lex.europa.eu/legal-content/FR/TXT/PDF/?uri=OJ:L_202401689
+
+
+URL 1 — PDF officiel JO (texte initial publié)
+https://eur-lex.europa.eu/legal-content/FR/TXT/PDF/?uri=OJ:L_202401689
+C'est le PDF du Journal Officiel tel que publié le 12 juillet 2024. C'est celui que je te recommande de prendre. Cohérent avec ce qu'utiliserait un cabinet de conseil sérieux, et c'est la version qui fait référence en production de droit dérivé.
+🟡 URL 2 — Page consolidée HTML (utile pour vérification visuelle)
+https://eur-lex.europa.eu/eli/reg/2024/1689/oj?locale=fr
+Pas un PDF mais utile pour vérifier la structure articles/annexes en parallèle.
+🟡 URL 3 — Texte consolidé (pour l'avenir si modifications)
+https://eur-lex.europa.eu/legal-content/FR/TXT/?uri=CELEX:02024R1689-20240712
+Version consolidée qui se mettra à jour automatiquement si le règlement est modifié. Pour l'instant identique à la version JO mais plus pérenne pour un usage récurrent.

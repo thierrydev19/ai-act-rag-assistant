@@ -34,6 +34,11 @@ def post_ask(
     payload: AskRequest,
     backend: ApiBackendService = Depends(get_backend_service),
 ) -> AskResponse:
-    response = backend.ask(payload.question)
+    response = backend.ask(
+        payload.question,
+        usage_case=payload.usage_case,
+        company_role=payload.company_role,
+        impact_level=payload.impact_level,
+    )
     return AskResponse(**response)
 

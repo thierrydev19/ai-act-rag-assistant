@@ -45,11 +45,18 @@ class TestIngestionService(unittest.TestCase):
         total_chars = sum(len(p.text.strip()) for p in doc.pages)
         self.assertGreater(total_chars, 10_000, "Le texte extrait ne doit pas être vide")
 
-        # Échantillon : page 1 (couverture / titre du corpus)
-        p1 = doc.pages[0].text
-        self.assertTrue(
-            "AI-Regulation" in p1 or "AI Regulation" in p1,
-            "Page 1 : contenu attendu du document source",
+        # Échantillon : page 1 = couverture du JO avec la référence officielle du règlement.
+        # On accepte les variantes d'extraction pypdf (espaces parasites éventuels après majuscules).
+        p1_normalized = doc.pages[0].text.replace(" ", "")
+        self.assertIn(
+            "2024/1689",
+            p1_normalized,
+            "Page 1 : référence du règlement attendue (UE 2024/1689)",
+        )
+        self.assertIn(
+            "REGLEMENT".lower(),
+            doc.pages[0].text.lower().replace(" ", "").replace("è", "e"),
+            "Page 1 : entête 'RÈGLEMENT' attendue",
         )
 
         # Échantillon : page 2 (corps, texte long)

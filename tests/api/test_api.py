@@ -33,7 +33,19 @@ class _FakeBackend:
             )
         ]
 
-    def ask(self, question: str) -> dict:
+    def ask(
+        self,
+        question: str,
+        *,
+        usage_case: str | None = None,
+        company_role: str | None = None,
+        impact_level: str | None = None,
+    ) -> dict:
+        context_used = {
+            "usage_case": usage_case or "non_renseigne",
+            "company_role": company_role or "non_renseigne",
+            "impact_level": impact_level or "non_renseigne",
+        }
         if not question.strip():
             return {
                 "question": question,
@@ -48,6 +60,9 @@ class _FakeBackend:
                 "uncertainties": ["Informations insuffisantes dans le corpus."],
                 "sources": [],
                 "limits": ["Pas d'avis juridique definitif."],
+                "context_needed": True,
+                "context_questions": ["Quel est votre cas d'usage principal ?"],
+                "context_used": context_used,
             }
         if "fiscal" in question.lower():
             return {
@@ -63,6 +78,9 @@ class _FakeBackend:
                 "uncertainties": ["Le cas depasse le corpus charge."],
                 "sources": [],
                 "limits": ["Corpus insuffisant pour conclure."],
+                "context_needed": False,
+                "context_questions": [],
+                "context_used": context_used,
             }
         return {
             "question": question,
@@ -77,6 +95,9 @@ class _FakeBackend:
             "uncertainties": ["La qualification precise depend de votre usage."],
             "sources": ["AI Act - Article 13 - page 52"],
             "limits": ["Pas d'avis juridique definitif."],
+            "context_needed": False,
+            "context_questions": [],
+            "context_used": context_used,
         }
 
 
@@ -109,13 +130,20 @@ class TestApi(unittest.TestCase):
     def test_post_ask_positive(self) -> None:
         response = self.client.post(
             "/api/ask",
-            json={"question": "Quelles obligations de transparence ?"},
+            json={
+                "question": "Quelles obligations de transparence ?",
+                "usage_case": "service_client",
+                "company_role": "fournisseur",
+                "impact_level": "assiste_un_humain",
+            },
         )
         self.assertEqual(response.status_code, 200)
         payload = response.json()
         self.assertEqual(payload["retrieval_status"], "sufficient")
         self.assertFalse(payload["refusal"])
         self.assertEqual(payload["business_case"], "service_client")
+        self.assertIn("context_needed", payload)
+        self.assertEqual(payload["context_used"]["usage_case"], "service_client")
         self.assertGreaterEqual(len(payload["sources"]), 1)
         self.assertTrue(payload["answer_simple"])
 
@@ -129,6 +157,7 @@ class TestApi(unittest.TestCase):
         self.assertEqual(payload["retrieval_status"], "insufficient")
         self.assertTrue(payload["refusal"])
         self.assertEqual(payload["business_case"], "generic")
+        self.assertIn("context_used", payload)
         self.assertEqual(payload["sources"], [])
 
     def test_post_ask_empty_question(self) -> None:
@@ -139,6 +168,7 @@ class TestApi(unittest.TestCase):
         self.assertTrue(payload["refusal"])
         self.assertEqual(payload["business_case"], "generic")
         self.assertIn("Question vide", payload["retrieval_message"])
+        self.assertTrue(payload["context_needed"])
 
     def test_no_auth_saas_in_api_routes(self) -> None:
         from pathlib import Path

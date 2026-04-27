@@ -56,9 +56,14 @@ class ShowcaseUI:
     def demo_cases(self) -> list[DemoCase]:
         return list(self._demo_cases)
 
-    def ask(self, question: str) -> UiTurnView:
+    def ask(self, question: str, *, context_hint: dict[str, str] | None = None) -> UiTurnView:
         """Execute un tour complet et retourne une vue directement affichable."""
-        user_question = UserQuestion(text=question)
+        context_hint = context_hint or {}
+        context_parts = [f"{k}={v}" for k, v in context_hint.items() if v and v != "je_ne_sais_pas"]
+        enriched = question
+        if context_parts:
+            enriched = f"{question}\nContexte utilisateur: " + " ; ".join(context_parts)
+        user_question = UserQuestion(text=enriched)
         retrieval_result = self._retrieval.retrieve(user_question)
         answer = self._generation.generate(user_question, retrieval_result)
         return UiTurnView(

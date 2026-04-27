@@ -18,6 +18,9 @@ class DemoCaseResponse(BaseModel):
 
 class AskRequest(BaseModel):
     question: str = Field(default="", description="Question utilisateur brute")
+    usage_case: str | None = Field(default=None, description="Cas d'usage principal")
+    company_role: str | None = Field(default=None, description="Role principal de l'entreprise")
+    impact_level: str | None = Field(default=None, description="Niveau d'impact du systeme")
 
 
 class AskResponse(BaseModel):
@@ -33,4 +36,7 @@ class AskResponse(BaseModel):
     uncertainties: list[str]
     sources: list[str]
     limits: list[str]
+    context_needed: bool = False
+    context_questions: list[str] = Field(default_factory=list)
+    context_used: dict[str, str] = Field(default_factory=dict)
 

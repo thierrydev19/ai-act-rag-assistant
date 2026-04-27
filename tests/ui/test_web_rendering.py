@@ -34,6 +34,13 @@ class TestWebRendering(unittest.TestCase):
         self.assertIn("refus explicite", self.source)
         self.assertIn("bg-rose-100", self.source)
 
+    def test_context_collection_ui_is_lightweight_and_conditional(self) -> None:
+        self.assertIn("result?.context_needed", self.source)
+        self.assertIn("Precisions recommandees (optionnelles)", self.source)
+        self.assertIn("cas d&apos;usage: je ne sais pas", self.source)
+        self.assertIn("role: je ne sais pas", self.source)
+        self.assertIn("impact: je ne sais pas", self.source)
+
 
 if __name__ == "__main__":
     unittest.main()

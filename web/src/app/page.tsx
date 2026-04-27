@@ -38,6 +38,9 @@ export default function Home() {
   const [isLoadingCases, setIsLoadingCases] = useState(true);
   const [isAsking, setIsAsking] = useState(false);
   const [errorMessage, setErrorMessage] = useState("");
+  const [usageCase, setUsageCase] = useState("je_ne_sais_pas");
+  const [companyRole, setCompanyRole] = useState("je_ne_sais_pas");
+  const [impactLevel, setImpactLevel] = useState("je_ne_sais_pas");
 
   useEffect(() => {
     let mounted = true;
@@ -76,7 +79,11 @@ export default function Home() {
     setErrorMessage("");
     setIsAsking(true);
     try {
-      const response = await askQuestion(question);
+      const response = await askQuestion(question, {
+        usage_case: usageCase,
+        company_role: companyRole,
+        impact_level: impactLevel,
+      });
       setResult(response);
     } catch (error) {
       setResult(null);
@@ -132,6 +139,58 @@ export default function Home() {
               Le resultat s&apos;affiche sans rechargement de page.
             </span>
           </div>
+          {result?.context_needed ? (
+            <div className="rounded-xl border border-indigo-200 bg-indigo-50 p-4">
+              <p className="mb-3 text-sm font-medium text-indigo-900">
+                Precisions conseillees pour mieux cibler la reponse
+              </p>
+              <div className="grid gap-3 md:grid-cols-3">
+                <select
+                  className="rounded-lg border border-indigo-200 bg-white px-3 py-2 text-sm text-zinc-800"
+                  value={usageCase}
+                  onChange={(event) => setUsageCase(event.target.value)}
+                >
+                  <option value="je_ne_sais_pas">cas d&apos;usage: je ne sais pas</option>
+                  <option value="rh_recrutement">rh_recrutement</option>
+                  <option value="service_client">service_client</option>
+                  <option value="scoring_decision_automatisee">
+                    scoring_decision_automatisee
+                  </option>
+                  <option value="biometrie_surveillance_controle_acces">
+                    biometrie_surveillance_controle_acces
+                  </option>
+                  <option value="generic">generic/autre</option>
+                </select>
+                <select
+                  className="rounded-lg border border-indigo-200 bg-white px-3 py-2 text-sm text-zinc-800"
+                  value={companyRole}
+                  onChange={(event) => setCompanyRole(event.target.value)}
+                >
+                  <option value="je_ne_sais_pas">role: je ne sais pas</option>
+                  <option value="fournisseur">fournisseur</option>
+                  <option value="deployeur_utilisateur">deployeur_utilisateur</option>
+                  <option value="integrateur_revendeur_autre">
+                    integrateur_revendeur_autre
+                  </option>
+                </select>
+                <select
+                  className="rounded-lg border border-indigo-200 bg-white px-3 py-2 text-sm text-zinc-800"
+                  value={impactLevel}
+                  onChange={(event) => setImpactLevel(event.target.value)}
+                >
+                  <option value="je_ne_sais_pas">impact: je ne sais pas</option>
+                  <option value="assiste_un_humain">assiste_un_humain</option>
+                  <option value="influence_une_decision">influence_une_decision</option>
+                  <option value="classe_ou_decide_automatiquement">
+                    classe_ou_decide_automatiquement
+                  </option>
+                </select>
+              </div>
+              <p className="mt-3 text-xs text-indigo-800">
+                Ces precisions restent facultatives et n&apos;ajoutent pas de preuve documentaire.
+              </p>
+            </div>
+          ) : null}
         </form>
       </section>
 
@@ -184,6 +243,18 @@ export default function Home() {
           <p className="mb-6 whitespace-pre-wrap text-sm text-zinc-600">
             {result.retrieval_message}
           </p>
+          {result.context_needed && result.context_questions.length > 0 ? (
+            <section className="mb-6 rounded-xl border border-indigo-200 bg-indigo-50 p-4">
+              <h3 className="mb-2 text-sm font-semibold text-indigo-900">
+                Precisions recommandees (optionnelles)
+              </h3>
+              <ul className="space-y-1 text-sm text-indigo-900">
+                {result.context_questions.map((q, idx) => (
+                  <li key={`ctx-q-${idx}`}>- {q}</li>
+                ))}
+              </ul>
+            </section>
+          ) : null}
 
           <div className="space-y-6 md:space-y-7">
             <ResultBlock title="Reponse simple" items={[result.answer_simple]} />

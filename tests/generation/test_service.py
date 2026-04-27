@@ -288,6 +288,7 @@ class TestGenerationService(unittest.TestCase):
         self.assertIn("Familles d'obligations a verifier:", payload.answer_text)
         self.assertIn("Conditions avant conclusion:", payload.answer_text)
         self.assertNotIn("actions de conformite potentielles", payload.answer_text)
+        self.assertNotIn("Cela donne une orientation utile", payload.answer_text)
 
     def test_intent_classification_for_qualification_and_documentation(self) -> None:
         svc = GenerationService()
@@ -512,6 +513,41 @@ class TestGenerationService(unittest.TestCase):
         self.assertFalse(payload.refusal)
         self.assertIn("pas comme une liste universelle", payload.answer_text)
         self.assertIn("avant toute conclusion ferme", payload.answer_text)
+
+    def test_quality_wording_block_4_and_6_are_not_mechanical(self) -> None:
+        svc = GenerationService(max_citations=2)
+        context = RetrievalResult(
+            chunks=[
+                _chunk(
+                    chunk_index=97,
+                    text="La qualification d'un systeme IA depend de sa finalite et du contexte de decision.",
+                    page_number=18,
+                    article_ref="Article 3",
+                ),
+                _chunk(
+                    chunk_index=98,
+                    text="Les obligations de transparence imposent des informations claires aux utilisateurs.",
+                    page_number=52,
+                    article_ref="Article 13",
+                ),
+            ],
+            is_sufficient=True,
+            status="sufficient",
+            message="ok",
+        )
+        qualification = svc.generate(
+            question=UserQuestion(text="Comment qualifier notre systeme d'IA ?"),
+            context=context,
+        )
+        transparence = svc.generate(
+            question=UserQuestion(text="Quelles obligations de transparence devons-nous respecter ?"),
+            context=context,
+        )
+        self.assertIn("4. Ce qui reste incertain", qualification.answer_text)
+        self.assertIn("6. Limites", qualification.answer_text)
+        self.assertNotEqual(qualification.answer_text, transparence.answer_text)
+        self.assertIn("qualification depend", qualification.answer_text.lower())
+        self.assertIn("modalites exactes d'information", transparence.answer_text.lower())
 
     def test_document_request_without_high_risk_is_explicitly_limited(self) -> None:
         svc = GenerationService(max_citations=1)
