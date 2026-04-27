@@ -61,7 +61,7 @@ def main() -> int:
         print(f"    status        = {retrieval_result.status}")
         for i, chunk in enumerate(retrieval_result.chunks):
             article = chunk.metadata.article_ref or "(no article)"
-            page = chunk.metadata.page_number_start
+            page = chunk.metadata.page_number
             preview = chunk.chunk_text[:120].replace("\n", " ")
             print(f"    chunk {i}: {article} p.{page} | {preview}...")
 
