@@ -358,6 +358,15 @@ class GenerationService:
         text = (question_text or "").lower()
         if any(word in text for word in ("applicable", "perimetre", "concerne")):
             return "applicability_perimetre"
+        # V3-3b : capter "verifier avant mise sur le marche" comme obligations
+        # entreprise plutot que qualification (la question contient "systeme ia"
+        # mais porte en realite sur les obligations de mise sur marche).
+        # Heuristique : "marche" + un verbe d'action ("verifier", "mettre",
+        # "mise", "avant") declenche obligations_entreprise.
+        if "marche" in text and any(
+            word in text for word in ("verifier", "mettre", "mise", "avant")
+        ):
+            return "obligations_entreprise"
         if any(word in text for word in ("definition", "qualif", "systeme ia")):
             return "qualification_systeme"
         if any(word in text for word in ("transparence", "informer", "information")):
@@ -400,20 +409,20 @@ class GenerationService:
         if not highlights:
             return "- Vous devez traiter ce sujet comme un point a clarifier avant toute decision operationnelle."
         by_intent = {
-            "applicability_perimetre": "- En pratique, le premier enjeu est de confirmer que votre usage entre bien dans le champ du reglement avant de deriver des obligations.",
-            "qualification_systeme": "- Pour votre entreprise, l'etape cle est de qualifier l'usage reel du systeme avant de discuter d'obligations detaillees.",
-            "obligations_entreprise": "- L'effet concret pour votre entreprise est de structurer les verifications par role, usage et niveau de risque plutot que d'appliquer une liste unique.",
-            "transparence_information": "- Concretement, vous devez surtout definir quelles informations seront donnees aux personnes exposees a l'IA et a quel moment.",
-            "documentation_preuves": "- L'enjeu pratique est d'organiser des preuves exploitables (documents, traces, instructions) en lien avec votre usage reel.",
-            "role_entreprise": "- Le point cle est de clarifier votre place dans la chaine de valeur, car les responsabilites evoluent selon ce role.",
-            "limites_conclusion": "- A ce stade, les sources permettent un cadrage utile, mais pas une position finale applicable sans verifications complementaires.",
+            "applicability_perimetre": "- Cela aide a determiner si votre activite entre dans le champ du reglement et si des obligations s'appliquent.",
+            "qualification_systeme": "- Cela permet d'orienter la qualification initiale de votre systeme, sans conclure definitivement.",
+            "obligations_entreprise": "- Cela indique des actions de conformite potentielles a organiser dans votre entreprise.",
+            "transparence_information": "- Cela implique de preparer des informations claires pour les utilisateurs et parties prenantes.",
+            "documentation_preuves": "- Cela implique de structurer des preuves documentaires pour justifier vos choix et controles.",
+            "role_entreprise": "- Cela aide a preciser vos responsabilites selon votre role dans la chaine de valeur IA.",
+            "limites_conclusion": "- Cela donne une orientation utile, mais insuffisante pour une decision definitive sans verifications complementaires.",
         }
         by_business_case = {
-            "rh_recrutement": "- Pour le recrutement, commencez par cadrer les etapes ou l'IA influence une decision individuelle et les controles associes.",
-            "service_client": "- Pour le service client, priorisez la clarte sur le role de l'IA et l'organisation d'un traitement des contestations.",
-            "biometrie_surveillance_controle_acces": "- Pour un usage biometrie/surveillance/controle d'acces, la robustesse du cadrage et des preuves devient determinante.",
-            "scoring_decision_automatisee": "- Pour le scoring/decision automatisee, la tracabilite des criteres et l'intervention humaine doivent etre explicites.",
-            "generic": "- Pour avancer utilement, transformez ces points en verifications operationnelles adaptees a votre contexte.",
+            "rh_recrutement": "- Pour un usage RH/recrutement, formalisez les informations donnees aux candidats et les controles internes associes.",
+            "service_client": "- Pour un service client assiste par IA, preparez des messages clairs sur le role de l'IA et les recours disponibles.",
+            "biometrie_surveillance_controle_acces": "- Pour la biometrie/surveillance/controle d'acces, anticipez un niveau d'exigence eleve et une justification documentaire robuste.",
+            "scoring_decision_automatisee": "- Pour du scoring ou de la decision automatisee, structurez la tracabilite des criteres et des revues humaines.",
+            "generic": "- Traduisez ces points en actions internes (processus, documentation, communication) avant toute decision de conformite.",
         }
         baseline = (
             by_intent.get(intent, by_intent["limites_conclusion"])
@@ -503,18 +512,10 @@ class GenerationService:
         selected: EvidenceSelection,
         question_text: str,
     ) -> str:
-        notes: list[str] = []
-        by_intent = {
-            "applicability_perimetre": "- Le corpus ne permet pas encore de trancher completement la frontiere entre cas couvert et cas exclu pour votre situation.",
-            "qualification_systeme": "- La qualification depend encore de faits d'usage (finalite, autonomie, contexte de decision) non totalement etablis ici.",
-            "obligations_entreprise": "- La priorite exacte des obligations depend du role reel de votre entreprise et du niveau de risque effectivement retenu.",
-            "transparence_information": "- Les modalites exactes d'information (moment, contenu detaille, destinataires) dependent de votre parcours utilisateur concret.",
-            "documentation_preuves": "- Le niveau de preuve attendu varie selon la qualification et le role, ce que les extraits ne figent pas integralement pour votre cas.",
-            "role_entreprise": "- Les responsabilites precises restent conditionnees par votre position contractuelle effective dans la chaine de valeur.",
-            "limites_conclusion": "- Les extraits permettent un cadrage, mais pas une conclusion exhaustive sur tous les points de votre situation.",
-        }
-        notes.append(by_intent.get(intent, by_intent["limites_conclusion"]))
-        notes.append("- Certains faits operationnels necessaires (organisation interne, perimetre exact, niveau de risque) ne sont pas fournis dans la question.")
+        notes: list[str] = [
+            "- Les extraits recuperes peuvent ne couvrir qu'une partie des exigences applicables.",
+            "- La qualification finale depend de faits operationnels non presents dans le corpus.",
+        ]
         if intent == "role_entreprise":
             notes.append("- La repartition exacte des responsabilites depend de vos contrats et de la chaine de valeur.")
         if business_case in {"biometrie_surveillance_controle_acces", "scoring_decision_automatisee"}:
@@ -538,14 +539,11 @@ class GenerationService:
         selected: EvidenceSelection,
     ) -> str:
         _ = (intent, business_case)
-        lines = ["- Cette reponse est informative et ne constitue pas un avis juridique definitif."]
-        if intent in {"qualification_systeme", "obligations_entreprise", "applicability_perimetre"}:
-            lines.append(
-                "- La conclusion depend encore du role exact, de la qualification du systeme et du niveau de risque retenu."
-            )
-        else:
-            lines.append("- Cette synthese ne permet pas, a elle seule, de conclure a une situation de conformite.")
-        lines.append("- En cas de doute sur des decisions engageantes, une verification juridique contextualisee reste necessaire.")
+        lines = [
+            "- Cette reponse est informative et ne constitue pas un avis juridique definitif.\n"
+            "- Elle ne permet pas d'affirmer 'conforme' ou 'non conforme' sans verification complementaire.\n"
+            "- Si le corpus est incomplet pour votre cas, la conclusion doit rester provisoire."
+        ]
         if self._is_document_request(question_text):
             doc_signals = self._document_signals(selected.core_chunks)
             if not doc_signals["high_risk"] or not doc_signals["provider_or_deployer"]:
