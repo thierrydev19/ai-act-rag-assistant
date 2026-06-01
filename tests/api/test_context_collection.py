@@ -26,6 +26,19 @@ class TestContextCollection(unittest.TestCase):
         self.assertGreaterEqual(len(questions), 1)
         self.assertLessEqual(len(questions), 3)
 
+    def test_framing_questions_trigger_context_collection(self) -> None:
+        context_used = {
+            "usage_case": "non_renseigne",
+            "company_role": "non_renseigne",
+            "impact_level": "non_renseigne",
+        }
+        for question in (
+            "Sommes-nous concernes par l'AI Act ?",
+            "Est-ce automatiquement un systeme a haut risque ?",
+            "Quel est probablement notre role ?",
+        ):
+            self.assertTrue(self.backend._needs_context(question, context_used), msg=question)
+
     def test_context_questions_not_for_precise_question(self) -> None:
         context_used = {
             "usage_case": "non_renseigne",

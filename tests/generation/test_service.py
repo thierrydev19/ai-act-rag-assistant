@@ -7,6 +7,7 @@ import unittest
 from pathlib import Path
 
 from app.document.models import DocumentChunk, DocumentMetadata, UserQuestion
+from app.generation.question_mode import classify_question_mode
 from app.generation.service import GenerationService
 from app.retrieval.service import RetrievalResult
 
@@ -600,6 +601,93 @@ class TestGenerationService(unittest.TestCase):
             "insuffisamment alignes avec l'intention" in payload.answer_text
             or "Aucun noyau documentaire coherent" in payload.answer_text
         )
+
+    def test_block1_answers_logical_form_for_q6(self) -> None:
+        svc = GenerationService(max_citations=2)
+        context = RetrievalResult(
+            chunks=[
+                _chunk(
+                    chunk_index=1,
+                    text="La qualification depend de la finalite d'usage et des categories annexe.",
+                    page_number=18,
+                    article_ref="Article 3",
+                ),
+                _chunk(
+                    chunk_index=2,
+                    text="La supervision humaine effective est exigee pour les systemes a haut risque.",
+                    page_number=60,
+                    article_ref="Article 14",
+                ),
+            ],
+            is_sufficient=True,
+            status="sufficient",
+            message="ok",
+        )
+        question = (
+            "Nous avons un chatbot sur notre site web qui repond aux questions clients. "
+            "Est-ce automatiquement un systeme a haut risque ?"
+        )
+        self.assertEqual(classify_question_mode(question), "yes_no_non_automatic")
+        payload = svc.generate(question=UserQuestion(text=question), context=context)
+        self.assertFalse(payload.refusal)
+        simple = payload.answer_text.split("2. Ce que cela veut dire")[0]
+        self.assertIn("Non, pas automatiquement", simple)
+        self.assertNotIn("Point saillant:", simple)
+        self.assertLessEqual(len([line for line in simple.splitlines() if line.strip()]), 4)
+
+    def test_block1_role_before_obligations_for_q17_style(self) -> None:
+        svc = GenerationService(max_citations=2)
+        context = RetrievalResult(
+            chunks=[
+                _chunk(
+                    chunk_index=1,
+                    text="Les obligations detaillees de conformite s'appliquent selon le role.",
+                    page_number=74,
+                    article_ref="Article 16",
+                ),
+                _chunk(
+                    chunk_index=2,
+                    text="Le deployeur et le fournisseur ont des responsabilites distinctes dans la chaine de valeur.",
+                    page_number=74,
+                    article_ref="Article 25",
+                ),
+            ],
+            is_sufficient=True,
+            status="sufficient",
+            message="ok",
+        )
+        question = (
+            "Comment savoir si notre PME est plutot fournisseur, deployeur ou simple utilisatrice "
+            "au sens de l'AI Act ?"
+        )
+        payload = svc.generate(question=UserQuestion(text=question), context=context)
+        self.assertFalse(payload.refusal)
+        simple = payload.answer_text.split("2. Ce que cela veut dire")[0]
+        self.assertIn("role", simple.lower())
+        self.assertNotIn("Point saillant:", simple)
+
+    def test_q20_forbidden_compliance_refusal(self) -> None:
+        svc = GenerationService()
+        context = RetrievalResult(
+            chunks=[
+                _chunk(
+                    chunk_index=1,
+                    text="Les obligations de conformite sont nombreuses.",
+                    page_number=10,
+                    article_ref="Article 16",
+                )
+            ],
+            is_sufficient=True,
+            status="sufficient",
+            message="ok",
+        )
+        payload = svc.generate(
+            question=UserQuestion(
+                text="Pouvez-vous me dire si mon entreprise est conforme a l'AI Act aujourd'hui, oui ou non ?"
+            ),
+            context=context,
+        )
+        self.assertTrue(payload.refusal)
 
     def test_role_question_prefers_role_evidence(self) -> None:
         svc = GenerationService(max_citations=2)

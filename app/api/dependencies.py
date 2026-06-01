@@ -5,6 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 import re
 
+from app.generation.question_mode import classify_question_mode, should_request_business_context
 from app.ui.app import DemoCase, UiTurnView, create_showcase_ui
 
 _SECTION_RE = re.compile(
@@ -110,16 +111,8 @@ class ApiBackendService:
         return [line for line in cleaned if line]
 
     def _needs_context(self, question: str, context_used: dict[str, str]) -> bool:
-        text = (question or "").lower()
-        ambiguous_markers = (
-            "quelles obligations",
-            "sommes-nous concernes",
-            "est-ce concerne",
-            "que devons-nous faire",
-            "que faut-il verifier",
-            "quels documents",
-        )
-        looks_ambiguous = any(marker in text for marker in ambiguous_markers)
+        question_mode = classify_question_mode(question)
+        looks_ambiguous = should_request_business_context(question, question_mode)
         enough_context = all(
             context_used[key] not in {"", "non_renseigne", "je_ne_sais_pas"}
             for key in ("usage_case", "company_role", "impact_level")

@@ -19,6 +19,7 @@ class EvidenceSelection:
     rejected_chunks: list[DocumentChunk]
     is_coherent: bool
     intent_aligned: bool
+    mode_aligned: bool
     message: str
 
 
@@ -35,6 +36,7 @@ class EvidenceSelector:
         question_text: str,
         chunks: list[DocumentChunk],
         intent: str = "limites_conclusion",
+        question_mode: str = "generic_contextual",
     ) -> EvidenceSelection:
         if not chunks:
             return EvidenceSelection(
@@ -43,12 +45,18 @@ class EvidenceSelector:
                 rejected_chunks=[],
                 is_coherent=False,
                 intent_aligned=False,
+                mode_aligned=False,
                 message="Aucun extrait disponible apres retrieval.",
             )
         question_tokens = self._question_tokens(question_text)
         scored: list[tuple[float, DocumentChunk]] = []
         for chunk in chunks:
-            score = self._score_chunk(question_tokens=question_tokens, chunk=chunk, intent=intent)
+            score = self._score_chunk(
+                question_tokens=question_tokens,
+                chunk=chunk,
+                intent=intent,
+                question_mode=question_mode,
+            )
             scored.append((score, chunk))
         scored.sort(key=lambda item: item[0], reverse=True)
 
@@ -64,6 +72,7 @@ class EvidenceSelector:
                 rejected_chunks=[chunk for _, chunk in scored],
                 is_coherent=False,
                 intent_aligned=False,
+                mode_aligned=False,
                 message=(
                     "Aucun noyau documentaire coherent n'a ete detecte: les extraits "
                     "sont trop eloignes ou trop faibles pour soutenir une reponse fiable."
@@ -75,24 +84,37 @@ class EvidenceSelector:
         rejected = remaining[2:]
         coherence = self._is_coherent(question_tokens=question_tokens, core_chunks=core)
         aligned = self._is_intent_aligned(intent=intent, core_chunks=core)
+        mode_aligned = self._is_mode_aligned(question_mode=question_mode, core_chunks=core)
         return EvidenceSelection(
             core_chunks=core,
             secondary_chunks=secondary,
             rejected_chunks=rejected,
             is_coherent=coherence,
             intent_aligned=aligned,
+            mode_aligned=mode_aligned,
             message=(
                 "Noyau documentaire coherent et aligne avec l'intention detectee."
-                if coherence and aligned
+                if coherence and aligned and mode_aligned
                 else (
                     "Extraits trop disperses pour soutenir une reponse fiable."
                     if not coherence
-                    else "Noyau documentaire insuffisamment aligne avec l'intention de la question."
+                    else (
+                        "Noyau documentaire insuffisamment aligne avec le mode logique de la question."
+                        if not mode_aligned
+                        else "Noyau documentaire insuffisamment aligne avec l'intention de la question."
+                    )
                 )
             ),
         )
 
-    def _score_chunk(self, *, question_tokens: set[str], chunk: DocumentChunk, intent: str) -> float:
+    def _score_chunk(
+        self,
+        *,
+        question_tokens: set[str],
+        chunk: DocumentChunk,
+        intent: str,
+        question_mode: str = "generic_contextual",
+    ) -> float:
         chunk_tokens = {token.lower() for token in _WORD_RE.findall(chunk.chunk_text) if len(token) >= 4}
         if not chunk_tokens:
             return 0.0
@@ -124,6 +146,9 @@ class EvidenceSelector:
         if "sanction" in text and "sanctions" not in question_tokens and "sanction" not in question_tokens:
             sanction_penalty = -0.03
         intent_bonus, intent_penalty = self._intent_signal_adjustment(intent=intent, chunk_tokens=chunk_tokens, text=text)
+        mode_bonus, mode_penalty = self._mode_signal_adjustment(
+            question_mode=question_mode, chunk_tokens=chunk_tokens, text=text
+        )
 
         # Bonus faible pour references structurees (plus exploitables en demo).
         ref_bonus = 0.03 if chunk.metadata.article_ref else 0.0
@@ -136,6 +161,8 @@ class EvidenceSelector:
             + sanction_penalty
             + intent_bonus
             + intent_penalty
+            + mode_bonus
+            + mode_penalty
         )
 
     def _is_coherent(self, *, question_tokens: set[str], core_chunks: list[DocumentChunk]) -> bool:
@@ -225,6 +252,14 @@ class EvidenceSelector:
                 themes.add(mapping[token])
         return themes
 
+    def _compact_text(self, text: str) -> str:
+        return re.sub(r"\s+", "", (text or "").lower())
+
+    def _has_signal(self, *, text: str, tokens: set[str], signal: str) -> bool:
+        compact = self._compact_text(text)
+        signal_compact = signal.replace(" ", "")
+        return signal in text or signal in tokens or signal_compact in compact
+
     def _is_intent_aligned(self, *, intent: str, core_chunks: list[DocumentChunk]) -> bool:
         if not core_chunks:
             return False
@@ -236,8 +271,8 @@ class EvidenceSelector:
         for chunk in core_chunks:
             tokens = {token.lower() for token in _WORD_RE.findall(chunk.chunk_text) if len(token) >= 4}
             text = chunk.chunk_text.lower()
-            has_expected = any(signal in text or signal in tokens for signal in expected)
-            has_penalized = any(signal in text or signal in tokens for signal in penalized)
+            has_expected = any(self._has_signal(text=text, tokens=tokens, signal=signal) for signal in expected)
+            has_penalized = any(self._has_signal(text=text, tokens=tokens, signal=signal) for signal in penalized)
             if has_expected:
                 matched += 1
             if has_penalized and not has_expected:
@@ -250,11 +285,83 @@ class EvidenceSelector:
         self, *, intent: str, chunk_tokens: set[str], text: str
     ) -> tuple[float, float]:
         expected, penalized = self._intent_signals(intent)
-        has_expected = any(signal in text or signal in chunk_tokens for signal in expected)
-        has_penalized = any(signal in text or signal in chunk_tokens for signal in penalized)
+        has_expected = any(self._has_signal(text=text, tokens=chunk_tokens, signal=signal) for signal in expected)
+        has_penalized = any(self._has_signal(text=text, tokens=chunk_tokens, signal=signal) for signal in penalized)
         bonus = 0.12 if has_expected else 0.0
         penalty = -0.10 if (has_penalized and not has_expected) else 0.0
         return bonus, penalty
+
+    def _is_mode_aligned(self, *, question_mode: str, core_chunks: list[DocumentChunk]) -> bool:
+        if question_mode == "generic_contextual":
+            return True
+        if question_mode == "forbidden_compliance_conclusion":
+            return True
+        if not core_chunks:
+            return False
+        framing_modes = {
+            "yes_no_non_automatic",
+            "applicability_gate",
+            "role_determination",
+            "obligation_prioritization",
+        }
+        chunks_to_check = core_chunks[:1] if question_mode in framing_modes else core_chunks
+        expected, penalized = self._mode_signals(question_mode)
+        matched = 0
+        strong_mismatch = 0
+        for chunk in chunks_to_check:
+            tokens = {token.lower() for token in _WORD_RE.findall(chunk.chunk_text) if len(token) >= 4}
+            text = chunk.chunk_text.lower()
+            has_expected = any(self._has_signal(text=text, tokens=tokens, signal=signal) for signal in expected)
+            has_penalized = any(self._has_signal(text=text, tokens=tokens, signal=signal) for signal in penalized)
+            if has_expected:
+                matched += 1
+            if has_penalized and not has_expected:
+                strong_mismatch += 1
+        if strong_mismatch >= 1 and matched == 0:
+            return False
+        return matched >= 1
+
+    def _mode_signal_adjustment(
+        self, *, question_mode: str, chunk_tokens: set[str], text: str
+    ) -> tuple[float, float]:
+        if question_mode == "generic_contextual":
+            return 0.0, 0.0
+        expected, penalized = self._mode_signals(question_mode)
+        has_expected = any(self._has_signal(text=text, tokens=chunk_tokens, signal=signal) for signal in expected)
+        has_penalized = any(self._has_signal(text=text, tokens=chunk_tokens, signal=signal) for signal in penalized)
+        bonus = 0.14 if has_expected else 0.0
+        if question_mode == "yes_no_non_automatic" and has_penalized:
+            penalty = -0.18
+        else:
+            penalty = -0.14 if (has_penalized and not has_expected) else 0.0
+        return bonus, penalty
+
+    def _mode_signals(self, question_mode: str) -> tuple[set[str], set[str]]:
+        by_mode = {
+            "yes_no_non_automatic": (
+                {"qualif", "annexe", "categorie", "definition", "finalite", "usage", "perimetre"},
+                {"supervision", "documentation technique", "organisme notifie", "marquage", "conformite operatoire"},
+            ),
+            "applicability_gate": (
+                {"champ", "application", "exclusion", "perimetre", "concerne", "applicable", "usage"},
+                {"supervision", "documentation technique", "obligations detaillees"},
+            ),
+            "role_determination": (
+                {"fournisseur", "deployeur", "importateur", "distributeur", "role"},
+                {"transparence", "documentation technique", "supervision"},
+            ),
+            "obligation_prioritization": (
+                {"obligation", "mesures", "verifier", "entreprise", "dirigeant"},
+                {"annexe iii seule", "certification"},
+            ),
+            "documents_evidence": (
+                {"documentation", "instructions", "preuve", "logs", "traces", "informations"},
+                {"transparence seule"},
+            ),
+            "forbidden_compliance_conclusion": (set(), set()),
+        }
+        default = (set(), set())
+        return by_mode.get(question_mode, default)
 
     def _intent_signals(self, intent: str) -> tuple[set[str], set[str]]:
         by_intent = {

@@ -8,6 +8,7 @@ from typing import Literal
 
 from app.document.models import UserQuestion
 from app.generation.evidence_selection import EvidenceSelection, EvidenceSelector
+from app.generation.question_mode import classify_question_mode
 from app.retrieval.service import RetrievalResult
 from app.logging.logger import get_logger
 
@@ -40,7 +41,22 @@ class GenerationService:
     def generate(self, question: UserQuestion, context: RetrievalResult) -> AnswerPayload:
         """Genere une reponse contrainte avec citations ou refus explicite."""
         intent = self._classify_intent(question.text)
+        question_mode = classify_question_mode(question.text)
         business_case = self._classify_business_case(question.text)
+        if question_mode == "forbidden_compliance_conclusion":
+            refusal = self._build_refusal(
+                context_message=(
+                    "Demande de conclusion de conformite globale (oui/non) non supportee "
+                    "sans audit complet et base documentaire dediee."
+                )
+            )
+            return AnswerPayload(
+                answer_text=refusal,
+                citations=[],
+                refusal=True,
+                intent="limites_conclusion",
+                business_case=business_case,
+            )
         if self._is_out_of_scope_question(question.text):
             refusal = self._build_refusal(
                 context_message=(
@@ -55,7 +71,7 @@ class GenerationService:
                 intent="limites_conclusion",
                 business_case="generic",
             )
-        if not context.is_sufficient or not context.chunks:
+        if not context.chunks:
             refusal = self._build_refusal(context_message=context.message)
             return AnswerPayload(
                 answer_text=refusal,
@@ -64,6 +80,7 @@ class GenerationService:
                 intent="limites_conclusion",
                 business_case="generic",
             )
+        retrieval_provisional = not context.is_sufficient
         if self._looks_like_semantic_false_positive(question.text, context):
             refusal = self._build_refusal(
                 context_message=(
@@ -83,6 +100,7 @@ class GenerationService:
             question_text=question.text,
             chunks=context.chunks,
             intent=intent,
+            question_mode=question_mode,
         )
         if not selection.core_chunks:
             refusal = self._build_refusal(context_message=selection.message)
@@ -102,11 +120,11 @@ class GenerationService:
                 intent=intent,
                 business_case=business_case,
             )
-        if not selection.intent_aligned:
+        if not selection.intent_aligned or not selection.mode_aligned:
             refusal = self._build_refusal(
                 context_message=(
                     "Les extraits recuperes ne sont pas suffisamment alignes avec l'intention "
-                    "de la question pour produire une reponse fiable et centree."
+                    "et le mode logique de la question pour produire une reponse fiable et centree."
                 )
             )
             return AnswerPayload(
@@ -123,7 +141,9 @@ class GenerationService:
             selected=selection,
             citations=citations,
             intent=intent,
+            question_mode=question_mode,
             business_case=business_case,
+            retrieval_provisional=retrieval_provisional,
         )
         return AnswerPayload(
             answer_text=answer_text,
@@ -166,10 +186,17 @@ class GenerationService:
         selected: EvidenceSelection,
         citations: list[str],
         intent: str,
+        question_mode: str,
         business_case: str,
+        retrieval_provisional: bool = False,
     ) -> str:
         highlights = self._extract_highlights(question.text, selected.core_chunks)
-        answer_simple = self._build_answer_simple(intent=intent, highlights=highlights)
+        answer_simple = self._build_answer_simple(
+            intent=intent,
+            question_mode=question_mode,
+            question_text=question.text,
+            highlights=highlights,
+        )
         business_impact = self._build_business_impact(
             intent=intent,
             business_case=business_case,
@@ -190,6 +217,7 @@ class GenerationService:
             highlights=highlights,
             selected=selected,
             question_text=question.text,
+            retrieval_provisional=retrieval_provisional,
         )
         sources = "\n".join(f"- {c}" for c in citations)
         limits = self._build_limits(
@@ -379,23 +407,73 @@ class GenerationService:
             return "role_entreprise"
         return "limites_conclusion"
 
-    def _build_answer_simple(self, *, intent: str, highlights: list[str]) -> str:
+    def _build_answer_simple(
+        self,
+        *,
+        intent: str,
+        question_mode: str,
+        question_text: str,
+        highlights: list[str],
+    ) -> str:
+        by_mode = {
+            "yes_no_non_automatic": (
+                "Non, pas automatiquement. Il faut d'abord qualifier l'usage exact, "
+                "le role de votre entreprise et verifier si une categorie regulatoire sensible s'applique."
+            ),
+            "applicability_gate": (
+                "Pas automatiquement : le champ d'application depend de votre usage concret, "
+                "de votre role et du contexte d'exploitation."
+            ),
+            "role_determination": (
+                "Votre role probable (fournisseur, deployeur ou autre) depend de qui met le systeme "
+                "sur le marche et de qui l'exploite ; les sources aident a cadrer cette distinction."
+            ),
+            "obligation_prioritization": (
+                "En premier, clarifiez role, qualification du systeme et niveau de risque ; "
+                "ensuite seulement les familles d'obligations a verifier."
+            ),
+            "documents_evidence": (
+                "Les documents et preuves a prevoir dependent du role, de la qualification "
+                "et du niveau de risque ; le corpus ne permet pas une liste universelle."
+            ),
+        }
+        if question_mode in by_mode:
+            return by_mode[question_mode]
         if not highlights:
             return (
                 "Les extraits donnent une orientation partielle, sans permettre une conclusion "
                 "definitive pour votre cas."
             )
-        first = highlights[0].split(" (AI Act - ", maxsplit=1)[0]
         by_intent = {
-            "applicability_perimetre": "Les extraits indiquent surtout comment verifier si votre cas entre dans le perimetre AI Act.",
-            "qualification_systeme": "Les extraits donnent des criteres utiles pour qualifier votre systeme, sans trancher a eux seuls.",
-            "obligations_entreprise": "Les extraits pointent des obligations a organiser dans l'entreprise selon votre role.",
-            "transparence_information": "Les extraits confirment des attentes de transparence envers les utilisateurs.",
-            "documentation_preuves": "Les extraits insistent sur la documentation et les preuves a conserver.",
-            "role_entreprise": "Les extraits aident a clarifier vos responsabilites selon votre position dans la chaine IA.",
-            "limites_conclusion": "Les extraits donnent des elements utiles, mais incomplets pour statuer.",
+            "applicability_perimetre": (
+                "Le perimetre depend de faits concrets : usage, role et contexte d'exploitation "
+                "doivent etre verifies avant de conclure."
+            ),
+            "qualification_systeme": (
+                "La qualification depend de l'usage et du contexte ; les extraits donnent des "
+                "criteres utiles sans trancher seuls."
+            ),
+            "obligations_entreprise": (
+                "Les obligations a organiser dependent d'abord du role et de la qualification, "
+                "pas d'une liste generique."
+            ),
+            "transparence_information": (
+                "Des attentes de transparence envers les utilisateurs sont en jeu ; "
+                "le niveau exact depend du cas."
+            ),
+            "documentation_preuves": (
+                "Documentation et preuves a structurer selon role et qualification ; "
+                "pas de checklist universelle a ce stade."
+            ),
+            "role_entreprise": (
+                "Vos responsabilites dependent de votre position dans la chaine de valeur IA."
+            ),
+            "limites_conclusion": (
+                "Les extraits donnent des elements utiles, mais incomplets pour statuer."
+            ),
         }
-        return f"{by_intent.get(intent, by_intent['limites_conclusion'])} Point saillant: {first}"
+        _ = question_text
+        return by_intent.get(intent, by_intent["limites_conclusion"])
 
     def _build_business_impact(
         self,
@@ -511,11 +589,17 @@ class GenerationService:
         highlights: list[str],
         selected: EvidenceSelection,
         question_text: str,
+        retrieval_provisional: bool = False,
     ) -> str:
         notes: list[str] = [
             "- Les extraits recuperes peuvent ne couvrir qu'une partie des exigences applicables.",
             "- La qualification finale depend de faits operationnels non presents dans le corpus.",
         ]
+        if retrieval_provisional:
+            notes.insert(
+                0,
+                "- La pertinence retrieval est limitee : cette reponse reste provisoire tant que le cas n'est pas precis.",
+            )
         if intent == "role_entreprise":
             notes.append("- La repartition exacte des responsabilites depend de vos contrats et de la chaine de valeur.")
         if business_case in {"biometrie_surveillance_controle_acces", "scoring_decision_automatisee"}:

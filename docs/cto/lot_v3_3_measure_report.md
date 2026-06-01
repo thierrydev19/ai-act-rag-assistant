@@ -11,7 +11,7 @@ Mesures realisees avec :
 
 ## Synthese
 
-- Questions positives correctement servies : 6/8
+- Questions positives correctement servies : 7/8
 - Refus correctement detectes : 4/4
 
 ## Tableau detaille
@@ -22,7 +22,7 @@ Mesures realisees avec :
 | positive | Quelles sanctions sont prevues en cas de violation ? | positive | sufficient | Y | 0.405 | 0.743 | 0.667 | 0.775 | N | limites_conclusion |
 | positive | Comment le reglement definit un systeme IA ? | positive | sufficient | Y | 0.559 | 0.483 | 0.000 | 0.690 | N | qualification_systeme |
 | positive | Quelles obligations existent pour les systemes IA a haut risque ? | positive | sufficient | Y | 0.536 | 0.612 | 0.400 | 0.702 | N | obligations_entreprise |
-| positive | Que faut-il verifier avant de mettre un systeme IA sur le marche ? | positive | sufficient | Y | 0.516 | 0.549 | 0.167 | 0.713 | Y | qualification_systeme |
+| positive | Que faut-il verifier avant de mettre un systeme IA sur le marche ? | positive | sufficient | Y | 0.516 | 0.549 | 0.167 | 0.713 | N | obligations_entreprise |
 | positive | Que prevoit le texte pour la surveillance des systemes IA ? | positive | sufficient | Y | 0.385 | 0.550 | 0.000 | 0.786 | N | limites_conclusion |
 | positive | Que dit l'AI Act sur les voies de recours ? | positive | sufficient | Y | 0.693 | 0.431 | 0.000 | 0.615 | N | limites_conclusion |
 | positive | Quels points de conformite sont attendus pour les fournisseurs ? | positive | sufficient | Y | 0.955 | 0.389 | 0.250 | 0.449 | Y | obligations_entreprise |
