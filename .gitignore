@@ -12,5 +12,5 @@ data/backup_*.patch
 # Corpus PDF officiel AI Act (Reglement UE 2024/1689) - non versionne
 # Telecharger depuis https://eur-lex.europa.eu/legal-content/FR/TXT/PDF/?uri=OJ:L_202401689
 # Renommer en AI-Act-FR-Officiel.pdf et placer dans docs/
-docs/AI-Act-FR-Officiel.pdf
+#docs/AI-Act-FR-Officiel.pdf
  
